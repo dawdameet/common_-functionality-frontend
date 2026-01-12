@@ -1,31 +1,148 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles } from "lucide-react";
+import { Send, Sparkles, PenTool, Type, Eraser } from "lucide-react";
 
 export function Scribblepad() {
   const [content, setContent] = useState("");
   const [isSubmitVisible, setIsSubmitVisible] = useState(false);
+  const [mode, setMode] = useState<"text" | "draw">("text");
+  
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  
+  // Initialize canvas
+  useEffect(() => {
+    if (mode === "draw" && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      
+      // Set canvas size to parent size
+      const resize = () => {
+        const parent = canvas.parentElement;
+        if (parent) {
+          canvas.width = parent.clientWidth;
+          canvas.height = parent.clientHeight;
+          // Re-setup context after resize
+          if (ctx) {
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.lineWidth = 3;
+            // Detect dark mode for initial ink color, but we'll dynamic check in draw
+            ctx.strokeStyle = document.documentElement.classList.contains("dark") ? "#e4e4e7" : "#18181b";
+          }
+        }
+      };
+      
+      resize();
+      window.addEventListener("resize", resize);
+      return () => window.removeEventListener("resize", resize);
+    }
+  }, [mode]);
 
   useEffect(() => {
     setIsSubmitVisible(content.length > 20);
   }, [content]);
 
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    setIsDrawing(true);
+    
+    // Get correct coordinates
+    const rect = canvas.getBoundingClientRect();
+    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : (e as React.MouseEvent).clientX - rect.left;
+    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : (e as React.MouseEvent).clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    // Dynamic ink color check
+    ctx.strokeStyle = document.documentElement.classList.contains("dark") ? "#e4e4e7" : "#18181b";
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : (e as React.MouseEvent).clientX - rect.left;
+    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : (e as React.MouseEvent).clientY - rect.top;
+    
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col max-w-4xl mx-auto w-full relative">
-      <div className="flex-1 pt-12">
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="What's on your mind? This space is private, raw, and safe."
-          className="w-full h-full bg-transparent border-none outline-none text-zinc-300 text-xl leading-relaxed resize-none placeholder:text-zinc-800 focus:ring-0"
-          autoFocus
-        />
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1">
+          <button
+            onClick={() => setMode("text")}
+            className={`p-2 rounded-md transition-all ${mode === "text" ? "bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
+          >
+            <Type className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setMode("draw")}
+            className={`p-2 rounded-md transition-all ${mode === "draw" ? "bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
+          >
+            <PenTool className="w-4 h-4" />
+          </button>
+        </div>
+        
+        {mode === "draw" && (
+           <button 
+             onClick={clearCanvas}
+             className="text-zinc-500 hover:text-red-500 transition-colors flex items-center gap-2 text-xs uppercase font-bold tracking-wider"
+           >
+             <Eraser className="w-4 h-4" /> Clear
+           </button>
+        )}
+      </div>
+
+      <div className="flex-1 relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]">
+        {mode === "text" ? (
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="What's on your mind? This space is private, raw, and safe."
+            className="w-full h-full bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-300 text-xl leading-relaxed resize-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-0 p-8"
+            autoFocus
+          />
+        ) : (
+          <canvas
+            ref={canvasRef}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+            className="w-full h-full cursor-crosshair touch-none block"
+          />
+        )}
       </div>
 
       <AnimatePresence>
-        {isSubmitVisible && (
+        {isSubmitVisible && mode === "text" && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -50,8 +167,8 @@ export function Scribblepad() {
         )}
       </AnimatePresence>
 
-      <div className="h-24 flex items-center border-t border-zinc-900 mt-auto">
-        <div className="flex gap-6 text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-600">
+      <div className="h-12 flex items-center mt-4">
+        <div className="flex gap-6 text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-500">
           <span>{content.split(/\s+/).filter(Boolean).length} Words</span>
           <span>Private Session</span>
           <span className="text-emerald-500/50">Auto-saved</span>
