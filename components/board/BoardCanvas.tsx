@@ -324,6 +324,7 @@ function SharedBoardView() {
           <div 
             key={item.id} 
             style={{ position: 'absolute', left: item.x, top: item.y, zIndex: 1 }}
+            onPointerDown={(e) => e.stopPropagation()}
           >
             <Card 
               id={item.id}
@@ -405,7 +406,10 @@ function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, 
     const worldPos = toWorld(clientX, clientY, rect);
 
     if (activeTool === "cursor") {
-       const targetId = (e.target as HTMLElement).dataset.id;
+       // Check for data-id on target or any of its ancestors
+       const targetElement = (e.target as HTMLElement).closest('[data-id]') as HTMLElement;
+       const targetId = targetElement?.dataset.id;
+       
        if (targetId) {
            const item = board.items.find(i => i.id === targetId);
            if (item && !isNote(item)) { 
@@ -606,7 +610,7 @@ function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, 
                     <div 
                         key={item.id} 
                         style={{ position: 'absolute', left: item.x, top: item.y, zIndex: 10 }}
-                        onMouseDown={(e) => e.stopPropagation()} 
+                        onPointerDown={(e) => e.stopPropagation()} 
                     >
                     <Card 
                         id={item.id}
@@ -639,7 +643,7 @@ function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, 
                                       (e.target as HTMLInputElement).blur();
                                     }
                                   }}
-                                onMouseDown={(e) => {
+                                onPointerDown={(e) => {
                                     // Allow text selection if not dragging handle
                                     e.stopPropagation();
                                 }}
@@ -648,8 +652,17 @@ function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, 
                             {/* Drag Handle for Text */}
                             <div 
                                 className="absolute -left-4 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 cursor-grab text-zinc-400"
-                                onMouseDown={(e) => {
+                                onPointerDown={(e) => {
                                     // This event bubbles to parent with data-id
+                                    // Wait, if we stop propagation here, the parent won't see it?
+                                    // The parent PersonalBoardView handles dragging via draggingItem state.
+                                    // The PARENT is listening on the Interaction Layer.
+                                    // So for Text, we DO want it to bubble to handlePointerDown!
+                                    // But we DON'T want it to bubble to InfiniteCanvas.
+                                    // The InfiniteCanvas is the grandparent.
+                                    // PersonalBoardView.handlePointerDown is attached to the "Interaction Layer" div.
+                                    // Note wrapper is INSIDE Interaction Layer.
+                                    // InfiniteCanvas WRAPS Interaction Layer.
                                 }}
                                 data-id={item.id}
                             >
