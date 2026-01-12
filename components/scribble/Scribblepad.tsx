@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2 } from "lucide-react";
+import { Send, Sparkles, PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tool = "pen" | "line" | "circle" | "text" | "eraser";
@@ -17,6 +17,7 @@ interface TextElement {
 
 interface SavedScribble {
   id: string;
+  title: string;
   timestamp: number;
   canvasData: string;
   textElements: TextElement[];
@@ -30,11 +31,16 @@ export function Scribblepad() {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const startPos = useRef<{ x: number, y: number } | null>(null);
   const snapshot = useRef<ImageData | null>(null);
+
+  // Dragging logic for textboxes
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragOffset = useRef<{ x: number, y: number } | null>(null);
 
   // Load history from local storage on mount
   useEffect(() => {
@@ -107,7 +113,6 @@ export function Scribblepad() {
             text: ""
         };
         setTextElements(prev => [...prev, newText]);
-        // Focus logic could be added here if we had refs to the inputs
         return;
     }
 
@@ -150,7 +155,6 @@ export function Scribblepad() {
         ctx.putImageData(snapshot.current, 0, 0);
       }
       ctx.beginPath();
-      // Ensure we are drawing in source-over for shapes
       ctx.globalCompositeOperation = "source-over"; 
       ctx.strokeStyle = activeColor;
       
@@ -172,7 +176,6 @@ export function Scribblepad() {
     setIsDrawing(false);
     startPos.current = null;
     snapshot.current = null;
-    // Reset composite operation
     if (canvasRef.current) {
         const ctx = canvasRef.current.getContext("2d");
         if (ctx) ctx.globalCompositeOperation = "source-over";
@@ -190,9 +193,8 @@ export function Scribblepad() {
 
   const handleToolSelect = (tool: Tool) => {
     setActiveTool(tool);
-    // Switch modes based on tool
     if (tool === "text") {
-        setMode("text"); // Enables pointer events on canvas for clicking to place
+        setMode("text"); 
     } else {
         setMode("draw");
     }
@@ -206,11 +208,38 @@ export function Scribblepad() {
       setTextElements(prev => prev.filter(t => t.id !== id));
   }
 
+  const startDragging = (e: React.MouseEvent | React.TouchEvent, id: string) => {
+    e.stopPropagation();
+    const pos = getPos(e as any); // Type cast simplified for brevity
+    const el = textElements.find(t => t.id === id);
+    if (el) {
+        setDraggingId(id);
+        dragOffset.current = { x: pos.x - el.x, y: pos.y - el.y };
+    }
+  };
+
+  const onDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+      if (draggingId && dragOffset.current) {
+          const pos = getPos(e as any);
+          setTextElements(prev => prev.map(t => 
+              t.id === draggingId 
+              ? { ...t, x: pos.x - dragOffset.current!.x, y: pos.y - dragOffset.current!.y } 
+              : t
+          ));
+      }
+  };
+
+  const stopDragging = () => {
+      setDraggingId(null);
+      dragOffset.current = null;
+  };
+
   const saveScribble = () => {
       if (!canvasRef.current) return;
       const canvasData = canvasRef.current.toDataURL();
       const newSave: SavedScribble = {
           id: Date.now().toString(),
+          title: `Untitled Scribble ${savedScribbles.length + 1}`,
           timestamp: Date.now(),
           canvasData,
           textElements
@@ -234,8 +263,52 @@ export function Scribblepad() {
       setIsHistoryOpen(false);
   };
 
+  const updateScribbleTitle = (id: string, newTitle: string) => {
+      const updated = savedScribbles.map(s => s.id === id ? { ...s, title: newTitle } : s);
+      setSavedScribbles(updated);
+      localStorage.setItem("scribble_history", JSON.stringify(updated));
+  };
+  
+  const deleteScribble = (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      if(confirm("Are you sure you want to delete this scribble?")) {
+        const updated = savedScribbles.filter(s => s.id !== id);
+        setSavedScribbles(updated);
+        localStorage.setItem("scribble_history", JSON.stringify(updated));
+      }
+  };
+
   return (
-    <div className="h-full flex flex-col max-w-4xl mx-auto w-full relative group">
+    <div 
+        className="h-full flex flex-col max-w-4xl mx-auto w-full relative group"
+        onMouseMove={(e) => {
+            if (draggingId) onDragMove(e);
+        }}
+        onMouseUp={stopDragging}
+        onTouchMove={(e) => {
+            if (draggingId) onDragMove(e);
+        }}
+        onTouchEnd={stopDragging}
+    >
+        {/* Top Header Bar */}
+        <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-light tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
+               <span>Scribblepad</span>
+               <button 
+                  onClick={() => setIsHistoryOpen(true)}
+                  className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300"
+               >
+                   <FolderOpen className="w-4 h-4" />
+                   <span>My Scribbles</span>
+               </button>
+            </h2>
+            <div className="flex items-center gap-2">
+                 <div className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-xs font-medium border border-emerald-500/20">
+                     {savedScribbles.length} Saved
+                 </div>
+            </div>
+        </div>
+
       <div className="flex-1 relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]">
         {/* Layer 1: Canvas (Bottom) */}
         <canvas
@@ -261,20 +334,28 @@ export function Scribblepad() {
                     position: 'absolute', 
                     left: el.x, 
                     top: el.y,
-                    transform: 'translate(-50%, -50%)', // Center on click
-                    zIndex: 20 
+                    transform: 'translate(-50%, -50%)', 
+                    zIndex: 30 
                 }}
             >
                 <div className="relative group/text">
+                    <div 
+                        className="absolute -left-3 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 opacity-0 group-hover/text:opacity-100 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-opacity"
+                        onMouseDown={(e) => startDragging(e, el.id)}
+                        onTouchStart={(e) => startDragging(e, el.id)}
+                    >
+                        <GripVertical className="w-4 h-4" />
+                    </div>
+
                     <textarea 
                         autoFocus
                         value={el.text}
                         onChange={(e) => updateText(el.id, e.target.value)}
                         placeholder="Type..."
-                        className="bg-transparent text-zinc-900 dark:text-zinc-100 min-w-[100px] resize-none overflow-hidden outline-none border border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 rounded p-1 placeholder:text-zinc-400"
+                        className="bg-transparent text-zinc-900 dark:text-zinc-100 min-w-[100px] resize-none overflow-hidden outline-none border border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 rounded p-1 placeholder:text-zinc-400 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm"
                         style={{
                             height: 'auto',
-                            width: `${Math.max(100, el.text.length * 8)}px`
+                            width: `${Math.max(100, el.text.length * 8 + 20)}px`
                         }}
                     />
                     <button 
@@ -343,13 +424,6 @@ export function Scribblepad() {
                     <Save className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-                    className="p-2 rounded-lg text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                    title="History"
-                  >
-                    <FileDown className="w-5 h-5" />
-                  </button>
-                  <button
                     onClick={clearCanvas}
                     className="p-2 rounded-lg text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     title="Clear Canvas"
@@ -384,40 +458,6 @@ export function Scribblepad() {
               </motion.div>
             )}
           </AnimatePresence>
-          
-           {/* History Panel */}
-           <AnimatePresence>
-               {isHistoryOpen && (
-                   <motion.div
-                       initial={{ opacity: 0, x: 20 }}
-                       animate={{ opacity: 1, x: 0 }}
-                       exit={{ opacity: 0, x: 20 }}
-                       className="absolute bottom-20 left-full ml-4 w-64 max-h-96 overflow-y-auto bg-white dark:bg-zinc-800 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 p-4"
-                   >
-                       <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-4">Saved Scribbles</h3>
-                       <div className="space-y-2">
-                           {savedScribbles.length === 0 ? (
-                               <p className="text-xs text-zinc-500 text-center py-4">No saved history</p>
-                           ) : (
-                               savedScribbles.map(scribble => (
-                                   <button
-                                       key={scribble.id}
-                                       onClick={() => loadScribble(scribble)}
-                                       className="w-full p-3 text-left bg-zinc-50 dark:bg-zinc-700/50 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl transition-colors group"
-                                   >
-                                       <div className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
-                                           {new Date(scribble.timestamp).toLocaleDateString()}
-                                       </div>
-                                       <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                                           {new Date(scribble.timestamp).toLocaleTimeString()}
-                                       </div>
-                                   </button>
-                               ))
-                           )}
-                       </div>
-                   </motion.div>
-               )}
-           </AnimatePresence>
 
           <button
             onClick={() => setIsPaletteOpen(!isPaletteOpen)}
@@ -427,6 +467,89 @@ export function Scribblepad() {
           </button>
         </div>
       </div>
+      
+       {/* Scribbles Modal */}
+       <AnimatePresence>
+           {isHistoryOpen && (
+               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                   <motion.div
+                       initial={{ opacity: 0, scale: 0.95 }}
+                       animate={{ opacity: 1, scale: 1 }}
+                       exit={{ opacity: 0, scale: 0.95 }}
+                       className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-4xl h-[80vh] shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden"
+                   >
+                       <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+                           <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">My Saved Scribbles</h2>
+                           <button onClick={() => setIsHistoryOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg">
+                               <X className="w-5 h-5 text-zinc-500" />
+                           </button>
+                       </div>
+                       
+                       <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 md:grid-cols-3 gap-6">
+                           {savedScribbles.length === 0 ? (
+                               <div className="col-span-full flex flex-col items-center justify-center text-zinc-500 py-12">
+                                   <FileDown className="w-12 h-12 mb-4 opacity-50" />
+                                   <p>No saved scribbles yet.</p>
+                               </div>
+                           ) : (
+                               savedScribbles.map(scribble => (
+                                   <div key={scribble.id} className="group relative aspect-video bg-zinc-100 dark:bg-zinc-800 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:ring-2 hover:ring-blue-500 transition-all cursor-pointer">
+                                       <img src={scribble.canvasData} className="w-full h-full object-contain p-4" alt="Scribble preview" onClick={() => loadScribble(scribble)} />
+                                       
+                                       <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/50 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity">
+                                           <div className="flex-1 mr-2">
+                                               {editingTitleId === scribble.id ? (
+                                                   <input 
+                                                       autoFocus
+                                                       type="text" 
+                                                       defaultValue={scribble.title} 
+                                                       className="w-full bg-white/90 text-black text-xs px-2 py-1 rounded outline-none"
+                                                       onBlur={(e) => {
+                                                           updateScribbleTitle(scribble.id, e.target.value);
+                                                           setEditingTitleId(null);
+                                                       }}
+                                                       onKeyDown={(e) => {
+                                                           if(e.key === 'Enter') {
+                                                               updateScribbleTitle(scribble.id, e.currentTarget.value);
+                                                               setEditingTitleId(null);
+                                                           }
+                                                       }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                   />
+                                               ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-white text-xs font-medium truncate drop-shadow-md">{scribble.title}</span>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingTitleId(scribble.id);
+                                                            }}
+                                                            className="p-1 hover:bg-white/20 rounded text-white"
+                                                        >
+                                                            <Edit2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                               )}
+                                           </div>
+                                            <button 
+                                                onClick={(e) => deleteScribble(e, scribble.id)}
+                                                className="p-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded shadow-lg"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                       </div>
+                                       
+                                       <div className="absolute bottom-0 left-0 w-full p-2 bg-gradient-to-t from-black/60 to-transparent text-[10px] text-zinc-300 text-right">
+                                           {new Date(scribble.timestamp).toLocaleDateString()}
+                                       </div>
+                                   </div>
+                               ))
+                           )}
+                       </div>
+                   </motion.div>
+               </div>
+           )}
+       </AnimatePresence>
 
       <div className="h-12 flex items-center mt-4">
         <div className="flex gap-6 text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-500">
