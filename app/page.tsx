@@ -20,6 +20,7 @@ export default function Home() {
           {activeTab === "tasks" && <TasksSurface />}
           {activeTab === "comm" && <CommSurface />}
           {activeTab === "ai" && <AISurface />}
+          {activeTab === "profile" && <ProfileSurface />}
         </div>
       </main>
     </div>
@@ -90,6 +91,7 @@ function CommSurface() {
 }
 
 import { AILayer } from "@/components/ai/AILayer";
+import { UserProfile } from "@/components/profile/UserProfile";
 
 function AISurface() {
   return (
@@ -100,6 +102,20 @@ function AISurface() {
       </header>
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <AILayer />
+      </div>
+    </div>
+  );
+}
+
+function ProfileSurface() {
+  return (
+    <div className="p-12 pb-12 h-full flex flex-col">
+      <header className="mb-8">
+        <h1 className="text-zinc-900 dark:text-zinc-100 text-3xl font-light tracking-tight">User Profile</h1>
+        <p className="text-zinc-500 mt-2">Manage your identity and context.</p>
+      </header>
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <UserProfile />
       </div>
     </div>
   );

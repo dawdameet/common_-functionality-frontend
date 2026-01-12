@@ -7,7 +7,8 @@ import {
   PenTool, 
   CheckSquare, 
   MessageSquare, 
-  Sparkles 
+  Sparkles,
+  UserCircle
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -70,9 +71,16 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       
       <div className="mt-auto flex flex-col gap-4 items-center mb-4">
         <ThemeToggle />
-        <div className="w-8 h-8 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700">
+        <button 
+          onClick={() => setActiveTab("profile")}
+          className={cn(
+            "w-8 h-8 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700 flex items-center justify-center transition-all hover:scale-105",
+            activeTab === "profile" ? "ring-2 ring-zinc-900 dark:ring-zinc-100 ring-offset-2" : ""
+          )}
+        >
            {/* Placeholder for user avatar */}
-        </div>
+           <UserCircle className="w-full h-full text-zinc-400" />
+        </button>
       </div>
     </div>
   );
