@@ -14,23 +14,30 @@ export function Scribblepad() {
   
   // Initialize canvas
   useEffect(() => {
-    if (mode === "draw" && canvasRef.current) {
+    // Always initialize canvas logic if reference exists
+    if (canvasRef.current) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext("2d");
       
-      // Set canvas size to parent size
       const resize = () => {
         const parent = canvas.parentElement;
         if (parent) {
+          // Save content
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = canvas.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx?.drawImage(canvas, 0, 0);
+
           canvas.width = parent.clientWidth;
           canvas.height = parent.clientHeight;
-          // Re-setup context after resize
+          
+          // Restore content
           if (ctx) {
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
             ctx.lineWidth = 3;
-            // Detect dark mode for initial ink color, but we'll dynamic check in draw
-            ctx.strokeStyle = document.documentElement.classList.contains("dark") ? "#e4e4e7" : "#18181b";
+            ctx.drawImage(tempCanvas, 0, 0);
           }
         }
       };
@@ -39,13 +46,14 @@ export function Scribblepad() {
       window.addEventListener("resize", resize);
       return () => window.removeEventListener("resize", resize);
     }
-  }, [mode]);
+  }, []); // Run once on mount
 
   useEffect(() => {
     setIsSubmitVisible(content.length > 20);
   }, [content]);
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (mode !== "draw") return; // Only draw when in draw mode
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -53,19 +61,17 @@ export function Scribblepad() {
 
     setIsDrawing(true);
     
-    // Get correct coordinates
     const rect = canvas.getBoundingClientRect();
     const x = ('touches' in e) ? e.touches[0].clientX - rect.left : (e as React.MouseEvent).clientX - rect.left;
     const y = ('touches' in e) ? e.touches[0].clientY - rect.top : (e as React.MouseEvent).clientY - rect.top;
 
     ctx.beginPath();
     ctx.moveTo(x, y);
-    // Dynamic ink color check
     ctx.strokeStyle = document.documentElement.classList.contains("dark") ? "#e4e4e7" : "#18181b";
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current) return;
+    if (!isDrawing || !canvasRef.current || mode !== "draw") return;
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
     
@@ -118,36 +124,39 @@ export function Scribblepad() {
       </div>
 
       <div className="flex-1 relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]">
-        {mode === "text" ? (
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What's on your mind? This space is private, raw, and safe."
-            className="w-full h-full bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-300 text-xl leading-relaxed resize-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-0 p-8"
-            autoFocus
-          />
-        ) : (
-          <canvas
-            ref={canvasRef}
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-            onTouchStart={startDrawing}
-            onTouchMove={draw}
-            onTouchEnd={stopDrawing}
-            className="w-full h-full cursor-crosshair touch-none block"
-          />
-        )}
+        {/* Layer 1: Canvas (Bottom) */}
+        <canvas
+          ref={canvasRef}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+          className={`absolute inset-0 w-full h-full block touch-none z-10 ${mode === "draw" ? "pointer-events-auto cursor-crosshair" : "pointer-events-none"}`}
+        />
+
+        {/* Layer 2: Textarea (Top) */}
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="What's on your mind? This space is private, raw, and safe."
+          className={`absolute inset-0 w-full h-full bg-transparent border-none outline-none text-zinc-800 dark:text-zinc-300 text-xl leading-relaxed resize-none placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-0 p-8 z-20 ${mode === "text" ? "pointer-events-auto" : "pointer-events-none"}`}
+          style={{ 
+             // Ensure text doesn't obscure canvas visually, only by occupying space
+             backgroundColor: 'transparent'
+          }}
+        />
       </div>
 
       <AnimatePresence>
-        {isSubmitVisible && mode === "text" && (
+        {isSubmitVisible && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-12 right-0 flex items-center gap-3"
+            className="absolute bottom-12 right-0 flex items-center gap-3 z-30"
           >
             <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors text-sm border border-zinc-700/50">
               <Sparkles className="w-4 h-4" />

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import { Card, CardType } from "./Card";
-import { GitPullRequest } from "lucide-react";
+import { GitPullRequest, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface BoardItem {
@@ -97,53 +97,59 @@ export function BoardCanvas() {
       {/* Mock Draft Modal */}
       <AnimatePresence>
         {isDrafting && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-12">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-12">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white dark:bg-zinc-900 rounded-2xl p-8 w-full max-w-lg shadow-2xl border border-zinc-200 dark:border-zinc-800 relative overflow-hidden"
+              className="bg-white dark:bg-zinc-900 rounded-2xl p-8 w-full max-w-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 relative overflow-hidden min-h-[400px] flex flex-col justify-center"
             >
               {submissionStatus === "success" ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-900 z-10">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white dark:bg-zinc-900 z-10 p-8 text-center">
                   <motion.div 
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-4"
+                    className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-6"
                   >
-                    <GitPullRequest className="w-8 h-8" />
+                    <GitPullRequest className="w-12 h-12" />
                   </motion.div>
-                  <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Pull Request Created</h3>
-                  <p className="text-zinc-500 mt-2">#42 has been submitted for review.</p>
+                  <h3 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Pull Request Created</h3>
+                  <p className="text-zinc-500 mt-2 text-lg">#42 has been submitted for review.</p>
                 </div>
               ) : (
-                <>
+                <div className="flex flex-col h-full">
                   <h2 className="text-xl font-semibold mb-6 text-zinc-900 dark:text-zinc-100">Propose New Idea</h2>
-                  <div className="space-y-4">
+                  <div className="space-y-4 flex-1">
                     <div>
                       <label className="block text-xs uppercase tracking-wider font-bold text-zinc-500 mb-2">Title</label>
-                      <input type="text" className="w-full bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg px-4 py-2 text-zinc-900 dark:text-zinc-100" placeholder="e.g., Offline Sync Support" />
+                      <input type="text" className="w-full bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg px-4 py-3 text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-zinc-500" placeholder="e.g., Offline Sync Support" />
                     </div>
                     <div>
-                      <label className="block text-xs uppercase tracking-wider font-bold text-zinc-500 mb-2">Description</label>
-                      <textarea className="w-full bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg px-4 py-2 text-zinc-900 dark:text-zinc-100 h-32 resize-none" placeholder="Describe the value..." />
-                    </div>
-                    <div className="flex justify-end gap-3 mt-6">
-                      <button 
-                        onClick={() => setIsDrafting(false)}
-                        className="px-4 py-2 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-                      >
-                        Cancel
-                      </button>
-                      <button 
-                        onClick={handleSubmit}
-                        className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-                      >
-                        Create Pull Request
-                      </button>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs uppercase tracking-wider font-bold text-zinc-500">Description</label>
+                        <button className="flex items-center gap-1.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
+                          <Sparkles className="w-3 h-3" />
+                          <span>Auto-Generate</span>
+                        </button>
+                      </div>
+                      <textarea className="w-full bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg px-4 py-3 text-zinc-900 dark:text-zinc-100 h-40 resize-none focus:ring-1 focus:ring-zinc-500" placeholder="Describe the value..." />
                     </div>
                   </div>
-                </>
+                  <div className="flex justify-end gap-3 mt-8">
+                    <button 
+                      onClick={() => setIsDrafting(false)}
+                      className="px-6 py-2.5 rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleSubmit}
+                      className="px-6 py-2.5 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity text-sm font-medium"
+                    >
+                      Create Pull Request
+                    </button>
+                  </div>
+                </div>
               )}
             </motion.div>
           </div>

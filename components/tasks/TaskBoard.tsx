@@ -50,7 +50,7 @@ export function TaskBoard() {
             <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-500">
               {column.label}
             </h3>
-            <span className="text-[10px] bg-zinc-900 text-zinc-600 px-2 py-0.5 rounded-full border border-zinc-800">
+            <span className="text-[10px] bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-800">
               {tasks.filter((t) => t.status === column.id).length}
             </span>
           </div>
@@ -61,11 +61,11 @@ export function TaskBoard() {
               .map((task) => (
                 <div 
                   key={task.id}
-                  className="group p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/50 hover:border-zinc-700/50 transition-all cursor-pointer"
+                  className="group p-5 rounded-2xl bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/50 hover:border-zinc-300 dark:hover:border-zinc-700/50 transition-all cursor-pointer shadow-sm dark:shadow-none"
                 >
                   <div className="flex flex-col gap-4">
                     <div className="flex justify-between items-start">
-                      <h4 className="text-zinc-200 font-medium leading-tight group-hover:text-zinc-100 transition-colors">
+                      <h4 className="text-zinc-800 dark:text-zinc-200 font-medium leading-tight group-hover:text-zinc-900 dark:group-hover:text-zinc-100 transition-colors">
                         {task.title}
                       </h4>
                       <div className={cn(
@@ -84,7 +84,7 @@ export function TaskBoard() {
                         <Calendar className="w-3 h-3" />
                         <span>{task.deadline}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-zinc-400 text-[10px] ml-auto font-mono opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-500 text-[10px] ml-auto font-mono opacity-0 group-hover:opacity-100 transition-opacity">
                         <LinkIcon className="w-3 h-3" />
                         <span>{task.origin}</span>
                       </div>
@@ -93,7 +93,7 @@ export function TaskBoard() {
                 </div>
               ))}
               
-            <button className="py-4 rounded-2xl border border-dashed border-zinc-800/50 text-zinc-600 text-xs hover:border-zinc-700 hover:text-zinc-500 transition-all flex items-center justify-center gap-2">
+            <button className="py-4 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800/50 text-zinc-500 dark:text-zinc-600 text-xs hover:border-zinc-400 dark:hover:border-zinc-700 hover:text-zinc-600 dark:hover:text-zinc-500 transition-all flex items-center justify-center gap-2">
               <span>+ Add Task</span>
             </button>
           </div>
