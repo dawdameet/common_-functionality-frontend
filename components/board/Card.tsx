@@ -12,13 +12,14 @@ interface CardProps {
   title: string;
   content: string;
   className?: string;
+  dragConstraints?: React.RefObject<Element>;
 }
 
 const typeStyles: Record<CardType, string> = {
-  idea: "border-blue-500/30 bg-blue-500/5 text-blue-100",
-  decision: "border-emerald-500/30 bg-emerald-500/5 text-emerald-100",
-  constraint: "border-amber-500/30 bg-amber-500/5 text-amber-100",
-  summary: "border-purple-500/30 bg-purple-500/5 text-purple-100",
+  idea: "border-blue-500/30 bg-blue-500/5 text-blue-900 dark:text-blue-100",
+  decision: "border-emerald-500/30 bg-emerald-500/5 text-emerald-900 dark:text-emerald-100",
+  constraint: "border-amber-500/30 bg-amber-500/5 text-amber-900 dark:text-amber-100",
+  summary: "border-purple-500/30 bg-purple-500/5 text-purple-900 dark:text-purple-100",
 };
 
 const typeLabels: Record<CardType, string> = {
@@ -28,10 +29,11 @@ const typeLabels: Record<CardType, string> = {
   summary: "Meeting Summary",
 };
 
-export function Card({ type, title, content, className }: CardProps) {
+export function Card({ type, title, content, className, dragConstraints }: CardProps) {
   return (
     <motion.div
       drag
+      dragConstraints={dragConstraints}
       dragMomentum={false}
       className={cn(
         "absolute p-6 rounded-2xl border w-72 shadow-2xl cursor-grab active:cursor-grabbing backdrop-blur-sm",

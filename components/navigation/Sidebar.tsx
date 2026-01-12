@@ -10,6 +10,7 @@ import {
   Sparkles 
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems = [
   { id: "board", label: "Shared Board", icon: LayoutDashboard },
@@ -67,7 +68,8 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         })}
       </div>
       
-      <div className="mt-auto">
+      <div className="mt-auto flex flex-col gap-4 items-center mb-4">
+        <ThemeToggle />
         <div className="w-8 h-8 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700">
            {/* Placeholder for user avatar */}
         </div>
