@@ -2,9 +2,10 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Card, CardType } from "./Card";
-import { GitPullRequest, Sparkles, Plus, Layout, ArrowLeft, Type, StickyNote, Minus, Circle as CircleIcon, MousePointer2, Move, Trash2 } from "lucide-react";
+import { GitPullRequest, Sparkles, Plus, Layout, ArrowLeft, Type, StickyNote, Minus, Circle as CircleIcon, MousePointer2, Move, Trash2, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { CalendarView } from "./CalendarView";
 
 // --- Types ---
 
@@ -48,7 +49,7 @@ interface PersonalBoard {
   createdAt: number;
 }
 
-type ViewMode = "shared" | "personal-list" | "personal-board";
+type ViewMode = "shared" | "personal-list" | "personal-board" | "calendar";
 
 const initialSharedItems: NoteItem[] = [
   {
@@ -77,7 +78,7 @@ const initialSharedItems: NoteItem[] = [
   },
 ];
 
-// --- Main Component ---
+// ... existing code ...
 
 export function BoardCanvas() {
   const [viewMode, setViewMode] = useState<ViewMode>("shared");
@@ -117,6 +118,13 @@ export function BoardCanvas() {
         {viewMode === "shared" && (
           <>
             <button
+              onClick={() => setViewMode("calendar")}
+              className="px-4 py-2 bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-white/80 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Calendar</span>
+            </button>
+            <button
               onClick={() => setViewMode("personal-list")}
               className="px-4 py-2 bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-white/80 dark:hover:bg-zinc-800 transition-colors"
             >
@@ -131,7 +139,7 @@ export function BoardCanvas() {
             </button>
           </>
         )}
-        {(viewMode === "personal-list" || viewMode === "personal-board") && (
+        {(viewMode === "personal-list" || viewMode === "personal-board" || viewMode === "calendar") && (
            <button
              onClick={() => setViewMode("shared")}
              className="px-4 py-2 bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-white/80 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
@@ -159,6 +167,8 @@ export function BoardCanvas() {
           onBack={() => setViewMode("personal-list")}
         />
       )}
+      
+      {viewMode === "calendar" && <CalendarView />}
     </div>
   );
 }
