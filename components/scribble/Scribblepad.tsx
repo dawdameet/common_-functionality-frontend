@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Image as ImageIcon } from "lucide-react";
+import { Send, Sparkles, PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Image as ImageIcon, CheckCircle2, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tool = "pen" | "line" | "circle" | "text" | "eraser";
@@ -23,6 +23,13 @@ interface SavedScribble {
   textElements: TextElement[];
 }
 
+interface Notification {
+  show: boolean;
+  title: string;
+  message: string;
+  type: "success" | "info";
+}
+
 export function Scribblepad() {
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [mode, setMode] = useState<"text" | "draw">("text");
@@ -32,6 +39,7 @@ export function Scribblepad() {
   const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<Notification>({ show: false, title: "", message: "", type: "success" });
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -90,6 +98,13 @@ export function Scribblepad() {
       return () => window.removeEventListener("resize", resize);
     }
   }, []);
+
+  const showNotification = (title: string, message: string, type: "success" | "info" = "success") => {
+    setNotification({ show: true, title, message, type });
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }));
+    }, 2500);
+  };
 
   const getPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -247,7 +262,7 @@ export function Scribblepad() {
       const newHistory = [newSave, ...savedScribbles];
       setSavedScribbles(newHistory);
       localStorage.setItem("scribble_history", JSON.stringify(newHistory));
-      alert("Scribble saved!");
+      showNotification("Saved", "Scribble saved to history.", "success");
   };
 
   const loadScribble = (scribble: SavedScribble) => {
@@ -449,7 +464,7 @@ export function Scribblepad() {
                 
                 {/* AI Pass Button */}
                 <button 
-                  onClick={() => alert("Analyzing drawing + text context...")}
+                  onClick={() => showNotification("Analyzing...", "Sending drawing context to AI (Mock)", "info")}
                   className="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all"
                 >
                   <Sparkles className="w-3 h-3" />
@@ -548,6 +563,29 @@ export function Scribblepad() {
                        </div>
                    </motion.div>
                </div>
+           )}
+       </AnimatePresence>
+
+       {/* Notification Toast/Modal */}
+       <AnimatePresence>
+           {notification.show && (
+             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+                 <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                    className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 max-w-sm w-full pointer-events-auto flex flex-col items-center text-center"
+                 >
+                     <div className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center mb-4",
+                        notification.type === "success" ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
+                     )}>
+                         {notification.type === "success" ? <CheckCircle2 className="w-6 h-6" /> : <Info className="w-6 h-6" />}
+                     </div>
+                     <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">{notification.title}</h3>
+                     <p className="text-zinc-500 dark:text-zinc-400 text-sm">{notification.message}</p>
+                 </motion.div>
+             </div>
            )}
        </AnimatePresence>
 
