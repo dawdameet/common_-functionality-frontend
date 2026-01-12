@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Sparkles, AlertCircle, Zap, Brain, Activity, SendHorizontal, Bot } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 interface Message {
   id: string;
@@ -32,11 +31,11 @@ export function AILayer() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = React.useCallback(() => {
     if (!inputValue.trim()) return;
 
     const newUserMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: "user",
       content: inputValue,
       timestamp: new Date()
@@ -48,14 +47,14 @@ export function AILayer() {
     // Simulate AI response
     setTimeout(() => {
       const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
+        id: crypto.randomUUID(),
         role: "ai",
         content: "I've noted that. I'm cross-referencing this with your latest board decisions regarding 'Privacy First'.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiResponse]);
     }, 1000);
-  };
+  }, [inputValue]);
 
   return (
     <div className="h-full flex flex-col gap-8 max-w-5xl mx-auto w-full">

@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Sparkles, CheckCircle2, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import NextImage from "next/image";
+import { useTheme } from "next-themes";
 
 type Tool = "pen" | "line" | "circle" | "text" | "eraser";
 const COLORS = ["#18181b", "#ffffff", "#ef4444", "#3b82f6", "#22c55e", "#a855f7"];
@@ -47,15 +49,30 @@ interface Confirmation {
 }
 
 export function Scribblepad() {
+  const { resolvedTheme } = useTheme();
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [shapeElements, setShapeElements] = useState<ShapeElement[]>([]);
   
   const [mode, setMode] = useState<"text" | "draw">("draw");
   const [activeTool, setActiveTool] = useState<Tool>("pen");
-  const [activeColor, setActiveColor] = useState(COLORS[0]);
+  const [manualColor, setManualColor] = useState<string | null>(null);
+  const activeColor = manualColor ?? (resolvedTheme === "dark" ? "#ffffff" : "#18181b");
+  
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const paletteRef = useRef<HTMLDivElement>(null);
-  const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>([]);
+  const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("scribble_history");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to load history", e);
+        }
+      }
+    }
+    return [];
+  });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   
@@ -69,17 +86,6 @@ export function Scribblepad() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [draggingType, setDraggingType] = useState<"text" | "shape" | null>(null);
   const dragOffset = useRef<{ x: number, y: number } | null>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("scribble_history");
-    if (saved) {
-      try {
-        setSavedScribbles(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load history", e);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -110,9 +116,6 @@ export function Scribblepad() {
       resize();
       window.addEventListener("resize", resize);
       
-      const isDark = document.documentElement.classList.contains("dark");
-      setActiveColor(isDark ? "#ffffff" : "#18181b");
-
       return () => window.removeEventListener("resize", resize);
     }
   }, []);
@@ -138,7 +141,7 @@ export function Scribblepad() {
     }, 1500);
   };
 
-  const getPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
+  const getPos = React.useCallback((e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
     let clientX = 0;
@@ -156,15 +159,15 @@ export function Scribblepad() {
       x: clientX - rect.left,
       y: clientY - rect.top
     };
-  };
+  }, []);
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const startDrawing = React.useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const pos = getPos(e);
     setIsPaletteOpen(false);
 
     if (activeTool === "text") {
         const newText: TextElement = {
-            id: Date.now().toString(),
+            id: crypto.randomUUID(),
             x: pos.x,
             y: pos.y,
             text: ""
@@ -195,9 +198,9 @@ export function Scribblepad() {
             ctx.lineWidth = 3;
         }
     }
-  };
+  }, [activeColor, activeTool, getPos, mode]);
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const draw = React.useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing || !canvasRef.current || mode !== "draw") return;
     
     if (activeTool === "pen" || activeTool === "eraser") {
@@ -207,11 +210,11 @@ export function Scribblepad() {
       ctx.lineTo(currentPos.x, currentPos.y);
       ctx.stroke();
     }
-  };
+  }, [activeTool, getPos, isDrawing, mode]);
 
   const [previewShape, setPreviewShape] = useState<ShapeElement | null>(null);
 
-  const drawPreview = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const drawPreview = React.useCallback((e: React.MouseEvent | React.TouchEvent) => {
       if (!isDrawing || !startPos.current) return;
       
       const pos = getPos(e);
@@ -229,13 +232,13 @@ export function Scribblepad() {
               color: activeColor
           });
       }
-  };
+  }, [activeColor, activeTool, draw, getPos, isDrawing]);
 
-  const stopDrawing = () => {
+  const stopDrawing = React.useCallback(() => {
     if (isDrawing) {
         if (activeTool === "line" || activeTool === "circle") {
             if (previewShape) {
-                setShapeElements(prev => [...prev, { ...previewShape, id: Date.now().toString() }]);
+                setShapeElements(prev => [...prev, { ...previewShape, id: crypto.randomUUID() }]);
                 setPreviewShape(null);
             }
         }
@@ -248,7 +251,7 @@ export function Scribblepad() {
             if (ctx) ctx.globalCompositeOperation = "source-over";
         }
     }
-  };
+  }, [activeTool, isDrawing, previewShape]);
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
@@ -326,11 +329,11 @@ export function Scribblepad() {
       dragOffset.current = null;
   };
 
-  const saveScribble = () => {
+  const saveScribble = React.useCallback(() => {
       if (!canvasRef.current) return;
       const canvasData = canvasRef.current.toDataURL();
       const newSave: SavedScribble = {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           title: `Untitled Scribble ${savedScribbles.length + 1}`,
           timestamp: Date.now(),
           canvasData,
@@ -341,7 +344,7 @@ export function Scribblepad() {
       setSavedScribbles(newHistory);
       localStorage.setItem("scribble_history", JSON.stringify(newHistory));
       showNotification("Saved", "Scribble saved to history.", "success");
-  };
+  }, [savedScribbles, textElements, shapeElements]);
 
   const loadScribble = (scribble: SavedScribble) => {
       clearCanvas();
@@ -585,7 +588,7 @@ export function Scribblepad() {
                   {COLORS.map((color) => (
                     <button
                       key={color}
-                      onClick={() => setActiveColor(color)}
+                      onClick={() => setManualColor(color)}
                       className={cn(
                         "w-6 h-6 rounded-full border border-zinc-200 dark:border-zinc-700 transition-transform hover:scale-110",
                         activeColor === color && "ring-2 ring-zinc-400 dark:ring-zinc-500 ring-offset-2 dark:ring-offset-zinc-800"
@@ -640,7 +643,14 @@ export function Scribblepad() {
                            ) : (
                                savedScribbles.map(scribble => (
                                    <div key={scribble.id} className="group relative aspect-video bg-zinc-100 dark:bg-zinc-800 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:ring-2 hover:ring-blue-500 transition-all cursor-pointer">
-                                       <img src={scribble.canvasData} className="w-full h-full object-contain p-4" alt="Scribble preview" onClick={() => loadScribble(scribble)} />
+                                       <NextImage 
+                                            src={scribble.canvasData} 
+                                            alt="Scribble preview" 
+                                            fill
+                                            className="object-contain p-4" 
+                                            onClick={() => loadScribble(scribble)}
+                                            unoptimized
+                                       />
                                        
                                        <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/50 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity">
                                            <div className="flex-1 mr-2">

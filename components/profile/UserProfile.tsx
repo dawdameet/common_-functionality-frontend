@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion } from "framer-motion";
 import { User, Mail, Briefcase, Building, Save, Camera } from "lucide-react";
 
 export function UserProfile() {

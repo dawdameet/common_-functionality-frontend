@@ -12,7 +12,7 @@ interface CardProps {
   title: string;
   content: string;
   className?: string;
-  dragConstraints?: React.RefObject<Element>;
+  dragConstraints?: React.RefObject<Element | null>;
 }
 
 const typeStyles: Record<CardType, string> = {
