@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Image as ImageIcon, CheckCircle2, Info, AlertTriangle } from "lucide-react";
+import { PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Sparkles, CheckCircle2, Info, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tool = "pen" | "line" | "circle" | "text" | "eraser";
@@ -50,11 +50,11 @@ export function Scribblepad() {
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [shapeElements, setShapeElements] = useState<ShapeElement[]>([]);
   
-  // Set initial mode to "draw" because activeTool defaults to "pen"
   const [mode, setMode] = useState<"text" | "draw">("draw");
   const [activeTool, setActiveTool] = useState<Tool>("pen");
   const [activeColor, setActiveColor] = useState(COLORS[0]);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const paletteRef = useRef<HTMLDivElement>(null);
   const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
@@ -66,12 +66,10 @@ export function Scribblepad() {
   const [isDrawing, setIsDrawing] = useState(false);
   const startPos = useRef<{ x: number, y: number } | null>(null);
   
-  // Dragging logic
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [draggingType, setDraggingType] = useState<"text" | "shape" | null>(null);
   const dragOffset = useRef<{ x: number, y: number } | null>(null);
 
-  // Load history
   useEffect(() => {
     const saved = localStorage.getItem("scribble_history");
     if (saved) {
@@ -83,7 +81,6 @@ export function Scribblepad() {
     }
   }, []);
 
-  // Initialize canvas
   useEffect(() => {
     if (canvasRef.current) {
       const canvas = canvasRef.current;
@@ -120,6 +117,20 @@ export function Scribblepad() {
     }
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (paletteRef.current && !paletteRef.current.contains(event.target as Node)) {
+        setIsPaletteOpen(false);
+      }
+    }
+    if (isPaletteOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isPaletteOpen]);
+
   const showNotification = (title: string, message: string, type: "success" | "info" = "success") => {
     setNotification({ show: true, title, message, type });
     setTimeout(() => {
@@ -130,8 +141,17 @@ export function Scribblepad() {
   const getPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
-    const clientX = ('touches' in e) ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = ('touches' in e) ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    let clientX = 0;
+    let clientY = 0;
+    
+    if ('touches' in e) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else {
+        clientX = (e as MouseEvent).clientX;
+        clientY = (e as MouseEvent).clientY;
+    }
+
     return {
       x: clientX - rect.left,
       y: clientY - rect.top
@@ -140,6 +160,7 @@ export function Scribblepad() {
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const pos = getPos(e);
+    setIsPaletteOpen(false);
 
     if (activeTool === "text") {
         const newText: TextElement = {
@@ -173,15 +194,12 @@ export function Scribblepad() {
             ctx.strokeStyle = activeColor;
             ctx.lineWidth = 3;
         }
-    } else {
-        // Line/Circle handled via SVG preview, no canvas drawing yet
     }
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !canvasRef.current || mode !== "draw") return;
     
-    // Only handle Pen/Eraser here. Shapes are handled via SVG state
     if (activeTool === "pen" || activeTool === "eraser") {
       const ctx = canvasRef.current.getContext("2d");
       if (!ctx) return;
@@ -191,7 +209,6 @@ export function Scribblepad() {
     }
   };
 
-  // Add preview state for shapes
   const [previewShape, setPreviewShape] = useState<ShapeElement | null>(null);
 
   const drawPreview = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -266,7 +283,7 @@ export function Scribblepad() {
 
   const startDragging = (e: React.MouseEvent | React.TouchEvent, id: string, type: "text" | "shape") => {
     e.stopPropagation();
-    const pos = getPos(e as any);
+    const pos = getPos(e);
     
     let el;
     if (type === "text") {
@@ -284,7 +301,7 @@ export function Scribblepad() {
 
   const onDragMove = (e: React.MouseEvent | React.TouchEvent) => {
       if (draggingId && dragOffset.current) {
-          const pos = getPos(e as any);
+          const pos = getPos(e);
           const deltaX = pos.x - dragOffset.current.x;
           const deltaY = pos.y - dragOffset.current.y;
 
@@ -336,7 +353,7 @@ export function Scribblepad() {
       };
       img.src = scribble.canvasData;
       setTextElements(scribble.textElements);
-      setShapeElements(scribble.shapeElements || []); // Fallback for old saves
+      setShapeElements(scribble.shapeElements || []);
       setIsHistoryOpen(false);
   };
 
@@ -371,15 +388,14 @@ export function Scribblepad() {
             stopDragging();
         }}
         onTouchMove={(e) => {
-            if (isDrawing) drawPreview(e as any);
-            if (draggingId) onDragMove(e as any);
+            if (isDrawing) drawPreview(e);
+            if (draggingId) onDragMove(e);
         }}
         onTouchEnd={() => {
             stopDrawing();
             stopDragging();
         }}
     >
-        {/* Top Header Bar */}
         <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-light tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
                <span>Scribblepad</span>
@@ -399,7 +415,6 @@ export function Scribblepad() {
         </div>
 
       <div className="flex-1 relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]">
-        {/* Layer 1: Canvas (Bottom - Pen Only) */}
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
@@ -410,13 +425,11 @@ export function Scribblepad() {
           )}
         />
 
-        {/* Layer 1.5: SVG for Shapes & Preview */}
         <svg className="absolute inset-0 w-full h-full z-20 pointer-events-none">
-            {/* Render Saved Shapes */}
             {shapeElements.map(shape => (
                 <g key={shape.id} className="pointer-events-auto group cursor-grab active:cursor-grabbing"
                    onMouseDown={(e) => startDragging(e, shape.id, "shape")}
-                   onTouchStart={(e) => startDragging(e as any, shape.id, "shape")}
+                   onTouchStart={(e) => startDragging(e, shape.id, "shape")}
                 >
                     {shape.type === "line" && (
                         <line 
@@ -434,7 +447,6 @@ export function Scribblepad() {
                             className="hover:stroke-blue-400"
                         />
                     )}
-                    {/* Delete Button for Shapes (visible on hover group) */}
                     <foreignObject x={shape.endX} y={shape.endY} width="20" height="20" className="opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                             onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }}
@@ -446,7 +458,6 @@ export function Scribblepad() {
                 </g>
             ))}
 
-            {/* Render Preview Shape */}
             {previewShape && (
                 <>
                     {previewShape.type === "line" && (
@@ -467,7 +478,6 @@ export function Scribblepad() {
             )}
         </svg>
 
-        {/* Layer 2: Text Elements (Top) */}
         {textElements.map((el) => (
             <div 
                 key={el.id}
@@ -509,8 +519,7 @@ export function Scribblepad() {
             </div>
         ))}
         
-        {/* Floating Tool Palette */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-4">
+        <div ref={paletteRef} className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-4">
           <AnimatePresence>
             {isPaletteOpen && (
               <motion.div
@@ -519,7 +528,6 @@ export function Scribblepad() {
                 exit={{ opacity: 0, y: 20, scale: 0.9 }}
                 className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-700 p-4 flex flex-col gap-4 mb-2"
               >
-                {/* Tools */}
                 <div className="flex gap-2 pb-4 border-b border-zinc-100 dark:border-zinc-700">
                   <button
                     onClick={() => handleToolSelect("pen")}
@@ -573,7 +581,6 @@ export function Scribblepad() {
                   </button>
                 </div>
 
-                {/* Colors */}
                 <div className="flex gap-3 justify-center">
                   {COLORS.map((color) => (
                     <button
@@ -588,7 +595,6 @@ export function Scribblepad() {
                   ))}
                 </div>
                 
-                {/* AI Pass Button */}
                 <button 
                   onClick={() => showNotification("Analyzing...", "Sending drawing context to AI (Mock)", "info")}
                   className="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all"
@@ -609,7 +615,6 @@ export function Scribblepad() {
         </div>
       </div>
       
-       {/* Scribbles Modal */}
        <AnimatePresence>
            {isHistoryOpen && (
                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -695,7 +700,6 @@ export function Scribblepad() {
            )}
        </AnimatePresence>
 
-       {/* Notification Toast/Modal */}
        <AnimatePresence>
            {notification.show && (
              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
@@ -718,7 +722,6 @@ export function Scribblepad() {
            )}
        </AnimatePresence>
 
-       {/* Confirmation Modal */}
        <AnimatePresence>
            {confirmation.show && (
              <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -753,7 +756,6 @@ export function Scribblepad() {
            )}
        </AnimatePresence>
 
-      {/* Footer Info */}
       <div className="h-12 flex items-center justify-between mt-4">
         <div className="flex gap-6 text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-500">
           <span>{textElements.length + shapeElements.length} Elements</span>
