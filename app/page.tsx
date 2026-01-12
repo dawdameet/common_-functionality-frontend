@@ -9,7 +9,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("board");
 
   return (
-    <div className="flex min-h-screen bg-zinc-950 text-zinc-400 font-sans selection:bg-zinc-100 selection:text-zinc-900">
+    <div className="flex min-h-screen bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-sans selection:bg-zinc-900 selection:text-zinc-100 dark:selection:bg-zinc-100 dark:selection:text-zinc-900 transition-colors duration-300">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
       <main className="flex-1 ml-16 md:ml-20 min-h-screen relative overflow-hidden">
@@ -29,10 +29,10 @@ export default function Home() {
 // Temporary placeholder components for surfaces
 function BoardSurface() {
   return (
-    <div className="h-full flex flex-col">
-      <header className="p-12 pb-0 z-10">
-        <h1 className="text-zinc-100 text-3xl font-light tracking-tight">Shared Board</h1>
-        <p className="text-zinc-500 mt-2">The canonical reality of your project.</p>
+    <div className="h-full flex flex-col relative">
+      <header className="absolute top-12 left-12 z-10 pointer-events-none">
+        <h1 className="text-zinc-900 dark:text-zinc-100 text-3xl font-light tracking-tight pointer-events-auto">Shared Board</h1>
+        <p className="text-zinc-500 mt-2 pointer-events-auto">The canonical reality of your project.</p>
       </header>
       <div className="flex-1 relative">
         <BoardCanvas />
@@ -45,12 +45,12 @@ import { Scribblepad } from "@/components/scribble/Scribblepad";
 
 function ScribbleSurface() {
   return (
-    <div className="p-12 pb-0 h-full flex flex-col">
-      <header className="mb-8">
-        <h1 className="text-zinc-100 text-3xl font-light tracking-tight">Scribblepad</h1>
-        <p className="text-zinc-500 mt-2">Private space for raw cognition.</p>
+    <div className="h-full flex flex-col relative">
+      <header className="absolute top-12 left-12 z-10 pointer-events-none">
+        <h1 className="text-zinc-900 dark:text-zinc-100 text-3xl font-light tracking-tight pointer-events-auto">Scribblepad</h1>
+        <p className="text-zinc-500 mt-2 pointer-events-auto">Private space for raw cognition.</p>
       </header>
-      <div className="flex-1">
+      <div className="flex-1 p-12 pt-32">
         <Scribblepad />
       </div>
     </div>
@@ -63,7 +63,7 @@ function TasksSurface() {
   return (
     <div className="p-12 pb-0 h-full flex flex-col">
       <header className="mb-12">
-        <h1 className="text-zinc-100 text-3xl font-light tracking-tight">Execution Spine</h1>
+        <h1 className="text-zinc-900 dark:text-zinc-100 text-3xl font-light tracking-tight">Execution Spine</h1>
         <p className="text-zinc-500 mt-2">Decisions in motion.</p>
       </header>
       <div className="flex-1">
@@ -79,7 +79,7 @@ function CommSurface() {
   return (
     <div className="p-12 pb-12 h-full flex flex-col">
       <header className="mb-8">
-        <h1 className="text-zinc-100 text-3xl font-light tracking-tight">Communication</h1>
+        <h1 className="text-zinc-900 dark:text-zinc-100 text-3xl font-light tracking-tight">Communication</h1>
         <p className="text-zinc-500 mt-2">Contextual, not floating.</p>
       </header>
       <div className="flex-1 min-h-0">
@@ -91,30 +91,16 @@ function CommSurface() {
 
 import { AILayer } from "@/components/ai/AILayer";
 
-
-
 function AISurface() {
-
   return (
-
     <div className="p-12 pb-12 h-full flex flex-col">
-
       <header className="mb-12">
-
-        <h1 className="text-zinc-100 text-3xl font-light tracking-tight">AI Layer</h1>
-
+        <h1 className="text-zinc-900 dark:text-zinc-100 text-3xl font-light tracking-tight">AI Layer</h1>
         <p className="text-zinc-500 mt-2">Silent operator observing and connecting.</p>
-
       </header>
-
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-
         <AILayer />
-
       </div>
-
     </div>
-
   );
-
 }

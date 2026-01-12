@@ -6,13 +6,13 @@ import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 export function ThemeToggle() {
-  const { setTheme, theme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
 
   return (
     <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       className={cn(
-        "relative p-3 rounded-xl transition-all duration-300 group text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900"
+        "relative p-3 rounded-xl transition-all duration-300 group text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900"
       )}
     >
       <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
