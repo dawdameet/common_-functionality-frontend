@@ -50,7 +50,8 @@ export function Scribblepad() {
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [shapeElements, setShapeElements] = useState<ShapeElement[]>([]);
   
-  const [mode, setMode] = useState<"text" | "draw">("text");
+  // Set initial mode to "draw" because activeTool defaults to "pen"
+  const [mode, setMode] = useState<"text" | "draw">("draw");
   const [activeTool, setActiveTool] = useState<Tool>("pen");
   const [activeColor, setActiveColor] = useState(COLORS[0]);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
@@ -180,7 +181,7 @@ export function Scribblepad() {
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !canvasRef.current || mode !== "draw") return;
     
-    // Only handle Pen/Eraser here. Shapes are handled via SVG state (not yet implemented in preview, doing simple canvas rect for now? No, let's use a temp shape state)
+    // Only handle Pen/Eraser here. Shapes are handled via SVG state
     if (activeTool === "pen" || activeTool === "eraser") {
       const ctx = canvasRef.current.getContext("2d");
       if (!ctx) return;
@@ -188,9 +189,6 @@ export function Scribblepad() {
       ctx.lineTo(currentPos.x, currentPos.y);
       ctx.stroke();
     }
-    // For shapes, we could update a 'preview' state here if we wanted real-time SVG preview
-    // But since we want them to be objects, let's just use the 'end' event to create them
-    // To visualize drag, we might need a separate 'previewShape' state.
   };
 
   // Add preview state for shapes
@@ -280,8 +278,6 @@ export function Scribblepad() {
     if (el) {
         setDraggingId(id);
         setDraggingType(type);
-        // For shapes, we track top-left (x,y). For lines, we need delta.
-        // Let's just track delta from 'x' 'y'.
         dragOffset.current = { x: pos.x - el.x, y: pos.y - el.y };
     }
   };
@@ -757,11 +753,15 @@ export function Scribblepad() {
            )}
        </AnimatePresence>
 
-      <div className="h-12 flex items-center mt-4">
+      {/* Footer Info */}
+      <div className="h-12 flex items-center justify-between mt-4">
         <div className="flex gap-6 text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-500">
           <span>{textElements.length + shapeElements.length} Elements</span>
           <span>{activeTool.charAt(0).toUpperCase() + activeTool.slice(1)} Mode</span>
           <span className="text-emerald-500/50">Auto-saved</span>
+        </div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-600 opacity-50">
+            Infinite Canvas Coming Soon
         </div>
       </div>
     </div>
