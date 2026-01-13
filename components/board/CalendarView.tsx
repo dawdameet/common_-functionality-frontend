@@ -35,6 +35,7 @@ export function CalendarView() {
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+  const daysInPrevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0).getDate();
 
   const prevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -89,10 +90,13 @@ export function CalendarView() {
         {/* Calendar Grid */}
         <div className="flex-1 grid grid-cols-7 grid-rows-[auto_1fr] gap-px bg-zinc-200 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
           {/* Weekday Headers */}
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
             <div
               key={day}
-              className="bg-zinc-50 dark:bg-zinc-900/50 p-4 text-center text-sm font-medium text-zinc-500 dark:text-zinc-400"
+              className={cn(
+                "bg-zinc-50 dark:bg-zinc-900/50 p-4 text-center text-sm font-medium text-zinc-500 dark:text-zinc-400",
+                index === 0 && "text-red-500 dark:text-red-400"
+              )}
             >
               {day}
             </div>
@@ -103,29 +107,39 @@ export function CalendarView() {
             const dayNumber = i - firstDayOfMonth + 1;
             const isCurrentMonth = dayNumber > 0 && dayNumber <= daysInMonth;
             const dayEvents = isCurrentMonth ? getEventsForDay(dayNumber) : [];
+            const isSunday = i % 7 === 0;
+
+            let displayDay = dayNumber;
+            if (dayNumber <= 0) {
+                displayDay = daysInPrevMonth + dayNumber;
+            } else if (dayNumber > daysInMonth) {
+                displayDay = dayNumber - daysInMonth;
+            }
 
             return (
               <div
                 key={i}
                 className={cn(
                   "bg-white dark:bg-zinc-950 min-h-[120px] p-2 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50 flex flex-col gap-1",
-                  !isCurrentMonth && "bg-zinc-50/50 dark:bg-zinc-900/20 text-zinc-300 dark:text-zinc-700"
+                  !isCurrentMonth && "bg-zinc-50/50 dark:bg-zinc-900/20",
+                  isSunday && "bg-red-50/30 dark:bg-red-900/5"
                 )}
               >
+                <div className="flex justify-between items-start">
+                    <span
+                    className={cn(
+                        "w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium",
+                        isCurrentMonth && isToday(dayNumber)
+                        ? "bg-blue-600 text-white"
+                        : isCurrentMonth 
+                            ? cn("text-zinc-700 dark:text-zinc-300", isSunday && "text-red-500 dark:text-red-400")
+                            : cn("text-zinc-400 dark:text-zinc-600 opacity-50", isSunday && "text-red-400/50 dark:text-red-400/50")
+                    )}
+                    >
+                    {displayDay}
+                    </span>
+                </div>
                 {isCurrentMonth && (
-                  <>
-                    <div className="flex justify-between items-start">
-                      <span
-                        className={cn(
-                          "w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium",
-                          isToday(dayNumber)
-                            ? "bg-blue-600 text-white"
-                            : "text-zinc-700 dark:text-zinc-300"
-                        )}
-                      >
-                        {dayNumber}
-                      </span>
-                    </div>
                     <div className="flex-1 flex flex-col gap-1 mt-1 overflow-y-auto">
                         {dayEvents.map(event => (
                             <div key={event.id} className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate font-medium border border-blue-200 dark:border-blue-800/50">
@@ -133,7 +147,6 @@ export function CalendarView() {
                             </div>
                         ))}
                     </div>
-                  </>
                 )}
               </div>
             );

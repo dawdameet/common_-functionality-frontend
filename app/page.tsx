@@ -17,12 +17,25 @@ export default function Home() {
         <div className="h-full w-full">
           {activeTab === "board" && <BoardSurface />}
           {activeTab === "scribble" && <ScribbleSurface />}
+          {activeTab === "calendar" && <CalendarSurface />}
           {activeTab === "tasks" && <TasksSurface />}
           {activeTab === "comm" && <CommSurface />}
           {activeTab === "ai" && <AISurface />}
           {activeTab === "profile" && <ProfileSurface />}
         </div>
       </main>
+    </div>
+  );
+}
+
+import { CalendarView } from "@/components/board/CalendarView";
+
+function CalendarSurface() {
+  return (
+    <div className="h-full flex flex-col relative">
+      <div className="flex-1 relative">
+        <CalendarView />
+      </div>
     </div>
   );
 }

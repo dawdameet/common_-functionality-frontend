@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Sparkles, CheckCircle2, Info, AlertTriangle } from "lucide-react";
+import { PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash2, Edit2, GripVertical, FolderOpen, Sparkles, CheckCircle2, Info, AlertTriangle, Hand } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NextImage from "next/image";
 import { useTheme } from "next-themes";
 
-type Tool = "pen" | "line" | "circle" | "text" | "eraser";
+type Tool = "pen" | "line" | "circle" | "text" | "eraser" | "hand";
 const COLORS = ["#18181b", "#ffffff", "#ef4444", "#3b82f6", "#22c55e", "#a855f7"];
 
 interface TextElement {
@@ -27,13 +27,27 @@ interface ShapeElement {
   color: string;
 }
 
+interface Point {
+    x: number;
+    y: number;
+}
+
+interface Stroke {
+    id: string;
+    points: Point[];
+    color: string;
+    width: number;
+    tool: "pen" | "eraser";
+}
+
 interface SavedScribble {
   id: string;
   title: string;
   timestamp: number;
-  canvasData: string;
+  canvasData: string; // Used as thumbnail/snapshot
   textElements: TextElement[];
   shapeElements: ShapeElement[];
+  strokes?: Stroke[];
 }
 
 interface Notification {
@@ -50,16 +64,21 @@ interface Confirmation {
 
 export function Scribblepad() {
   const { resolvedTheme } = useTheme();
+  
+  // State
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [shapeElements, setShapeElements] = useState<ShapeElement[]>([]);
-  
-  const [mode, setMode] = useState<"text" | "draw">("draw");
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
+
   const [activeTool, setActiveTool] = useState<Tool>("pen");
   const [manualColor, setManualColor] = useState<string | null>(null);
   const activeColor = manualColor ?? (resolvedTheme === "dark" ? "#ffffff" : "#18181b");
   
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const paletteRef = useRef<HTMLDivElement>(null);
+  
+  // History State
   const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("scribble_history");
@@ -79,47 +98,141 @@ export function Scribblepad() {
   const [notification, setNotification] = useState<Notification>({ show: false, title: "", message: "", type: "success" });
   const [confirmation, setConfirmation] = useState<Confirmation>({ show: false, id: null });
   
+  // Canvas & Interaction State
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const startPos = useRef<{ x: number, y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [previewShape, setPreviewShape] = useState<ShapeElement | null>(null);
   
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [draggingType, setDraggingType] = useState<"text" | "shape" | null>(null);
+  // Infinite Canvas State
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+
+  // Refs for drawing loop (to avoid closure staleness without re-renders)
+  const currentStrokeRef = useRef<Point[]>([]);
+  const startPos = useRef<{ x: number, y: number } | null>(null); // Screen coords for shapes
+  const lastPointerPos = useRef<{ x: number, y: number } | null>(null); // Screen coords for panning
+
+  const [draggedElementId, setDraggedElementId] = useState<string | null>(null);
+  const [draggedElementType, setDraggedElementType] = useState<"text" | "shape" | null>(null);
   const dragOffset = useRef<{ x: number, y: number } | null>(null);
 
-  useEffect(() => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-      
-      const resize = () => {
-        const parent = canvas.parentElement;
-        if (parent) {
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = canvas.width;
-          tempCanvas.height = canvas.height;
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx?.drawImage(canvas, 0, 0);
+  // --- Helpers defined early to avoid hoisting issues ---
 
-          canvas.width = parent.clientWidth;
-          canvas.height = parent.clientHeight;
-          
-          if (ctx) {
-            ctx.lineCap = "round";
-            ctx.lineJoin = "round";
-            ctx.lineWidth = 3;
-            ctx.drawImage(tempCanvas, 0, 0);
-          }
-        }
-      };
-      
-      resize();
-      window.addEventListener("resize", resize);
-      
-      return () => window.removeEventListener("resize", resize);
-    }
+  const showNotification = useCallback((title: string, message: string, type: "success" | "info" = "success") => {
+    setNotification({ show: true, title, message, type });
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }));
+    }, 1500);
   }, []);
 
+  const renderCanvas = useCallback(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      // Clear Screen
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Apply Transform
+      ctx.setTransform(zoom, 0, 0, zoom, pan.x, pan.y);
+
+      // Draw Background Image (Legacy Support)
+      if (backgroundImage) {
+          ctx.drawImage(backgroundImage, 0, 0);
+      }
+
+      // Draw Strokes
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      strokes.forEach(stroke => {
+          if (stroke.points.length < 2) return;
+          
+          ctx.beginPath();
+          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+          for (let i = 1; i < stroke.points.length; i++) {
+              ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+          }
+
+          if (stroke.tool === "eraser") {
+              ctx.globalCompositeOperation = "destination-out";
+              ctx.lineWidth = stroke.width;
+          } else {
+              ctx.globalCompositeOperation = "source-over";
+              ctx.strokeStyle = stroke.color;
+              ctx.lineWidth = stroke.width;
+          }
+          ctx.stroke();
+      });
+      
+      // Draw Current Stroke (if any)
+      if (isDrawing && currentStrokeRef.current.length > 0 && (activeTool === 'pen' || activeTool === 'eraser')) {
+          const points = currentStrokeRef.current;
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 1; i < points.length; i++) {
+              ctx.lineTo(points[i].x, points[i].y);
+          }
+          
+          if (activeTool === "eraser") {
+              ctx.globalCompositeOperation = "destination-out";
+              ctx.lineWidth = 20;
+          } else {
+              ctx.globalCompositeOperation = "source-over";
+              ctx.strokeStyle = activeColor;
+              ctx.lineWidth = 3 / zoom; // Maintain world width
+              ctx.lineWidth = 3; 
+          }
+          ctx.stroke();
+      }
+  }, [strokes, pan, zoom, backgroundImage, isDrawing, activeTool, activeColor]);
+
+  // --- Effects ---
+
+  // Handle Spacebar for Pan Mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat && !(e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement)) {
+        setIsSpacePressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setIsSpacePressed(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+        window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  // Resize Handler
+  useEffect(() => {
+    const handleResize = () => {
+        if (canvasRef.current && canvasRef.current.parentElement) {
+            canvasRef.current.width = canvasRef.current.parentElement.clientWidth;
+            canvasRef.current.height = canvasRef.current.parentElement.clientHeight;
+            renderCanvas();
+        }
+    };
+    window.addEventListener("resize", handleResize);
+    handleResize();
+    return () => window.removeEventListener("resize", handleResize);
+  }, [renderCanvas]);
+
+  // Trigger render on changes
+  useEffect(() => {
+      renderCanvas();
+  }, [renderCanvas]);
+
+  // Handle outside click for palette
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (paletteRef.current && !paletteRef.current.contains(event.target as Node)) {
@@ -134,142 +247,205 @@ export function Scribblepad() {
     };
   }, [isPaletteOpen]);
 
-  const showNotification = (title: string, message: string, type: "success" | "info" = "success") => {
-    setNotification({ show: true, title, message, type });
-    setTimeout(() => {
-      setNotification(prev => ({ ...prev, show: false }));
-    }, 1500);
-  };
+  // --- Interaction Logic ---
 
-  const getPos = React.useCallback((e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
+  // Coordinate Mapping
+  const getScreenPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent | React.PointerEvent) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
     let clientX = 0;
     let clientY = 0;
     
-    if ('touches' in e) {
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
+    // Check for touches first for backward compatibility if needed, though PointerEvent handles most
+    if ('touches' in e && (e as unknown as TouchEvent).touches.length > 0) {
+        clientX = (e as unknown as TouchEvent).touches[0].clientX;
+        clientY = (e as unknown as TouchEvent).touches[0].clientY;
     } else {
-        clientX = (e as MouseEvent).clientX;
-        clientY = (e as MouseEvent).clientY;
+        clientX = (e as MouseEvent | React.PointerEvent).clientX;
+        clientY = (e as MouseEvent | React.PointerEvent).clientY;
     }
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  };
 
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
-    };
-  }, []);
+  const getWorldPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent | React.PointerEvent) => {
+      const screenPos = getScreenPos(e);
+      return {
+          x: (screenPos.x - pan.x) / zoom,
+          y: (screenPos.y - pan.y) / zoom
+      };
+  };
 
-  const startDrawing = React.useCallback((e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    const pos = getPos(e);
-    setIsPaletteOpen(false);
+  // Input Handlers
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const zoomSensitivity = 0.001;
+        const delta = -e.deltaY * zoomSensitivity;
+        const newZoom = Math.min(Math.max(0.1, zoom + delta), 5);
+        
+        // Zoom towards pointer
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (rect) {
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Calculate world point under mouse before zoom
+            const worldX = (mouseX - pan.x) / zoom;
+            const worldY = (mouseY - pan.y) / zoom;
+            
+            // Calculate new pan to keep world point under mouse
+            const newPanX = mouseX - worldX * newZoom;
+            const newPanY = mouseY - worldY * newZoom;
+            
+            setZoom(newZoom);
+            setPan({ x: newPanX, y: newPanY });
+        }
+    } else {
+        // Pan
+        setPan(prev => ({ x: prev.x - e.deltaX, y: prev.y - e.deltaY }));
+    }
+  };
 
-    if (activeTool === "text") {
-        const newText: TextElement = {
-            id: crypto.randomUUID(),
-            x: pos.x,
-            y: pos.y,
-            text: ""
-        };
-        setTextElements(prev => [...prev, newText]);
+  const handlePointerDown = (e: React.PointerEvent) => {
+      // If touching palette or other UI, don't draw
+      if ((e.target as HTMLElement).closest('button, input, textarea')) return;
+      
+      (e.target as Element).setPointerCapture(e.pointerId);
+
+      setIsPaletteOpen(false);
+      const screenPos = getScreenPos(e);
+      const worldPos = getWorldPos(e);
+
+      // Check if we are Panning
+      if (activeTool === "hand" || isSpacePressed || (activeTool === 'pen' && e.button === 1)) {
+          setIsDragging(true);
+          lastPointerPos.current = screenPos;
+          return;
+      }
+
+      // Check Tools
+      if (activeTool === "text") {
+          const newText: TextElement = {
+              id: crypto.randomUUID(),
+              x: worldPos.x,
+              y: worldPos.y,
+              text: ""
+          };
+          setTextElements(prev => [...prev, newText]);
+          setActiveTool("pen"); 
+          return;
+      }
+
+      // Start Drawing / Shape
+      setIsDrawing(true);
+      startPos.current = worldPos;
+      
+      if (activeTool === "pen" || activeTool === "eraser") {
+          currentStrokeRef.current = [worldPos];
+          renderCanvas();
+      }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const screenPos = getScreenPos(e);
+    
+    // Panning
+    if (isDragging && lastPointerPos.current) {
+        const deltaX = screenPos.x - lastPointerPos.current.x;
+        const deltaY = screenPos.y - lastPointerPos.current.y;
+        setPan(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
+        lastPointerPos.current = screenPos;
         return;
     }
 
-    if (mode !== "draw") return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    // Dragging Elements
+    if (draggedElementId && dragOffset.current) {
+         const worldPos = getWorldPos(e);
+         if (draggedElementType === "text") {
+             setTextElements(prev => prev.map(t => 
+                 t.id === draggedElementId ? { ...t, x: worldPos.x - dragOffset.current!.x, y: worldPos.y - dragOffset.current!.y } : t
+             ));
+         } else if (draggedElementType === "shape") {
+             setShapeElements(prev => prev.map(s => {
+                 if (s.id !== draggedElementId) return s;
+                 const width = s.endX - s.x;
+                 const height = s.endY - s.y;
+                 const newX = worldPos.x - dragOffset.current!.x;
+                 const newY = worldPos.y - dragOffset.current!.y;
+                 return { ...s, x: newX, y: newY, endX: newX + width, endY: newY + height };
+             }));
+         }
+         return;
+    }
 
-    setIsDrawing(true);
-    startPos.current = pos;
+    if (!isDrawing) return;
+
+    const worldPos = getWorldPos(e);
 
     if (activeTool === "pen" || activeTool === "eraser") {
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-        
-        if (activeTool === "eraser") {
-            ctx.globalCompositeOperation = "destination-out";
-            ctx.lineWidth = 20;
-        } else {
-            ctx.globalCompositeOperation = "source-over";
-            ctx.strokeStyle = activeColor;
-            ctx.lineWidth = 3;
-        }
+        currentStrokeRef.current.push(worldPos);
+        renderCanvas(); 
+    } else if (activeTool === "line" || activeTool === "circle") {
+        setPreviewShape({
+            id: "preview",
+            type: activeTool,
+            x: startPos.current!.x,
+            y: startPos.current!.y,
+            endX: worldPos.x,
+            endY: worldPos.y,
+            color: activeColor
+        });
     }
-  }, [activeColor, activeTool, getPos, mode]);
+  };
 
-  const draw = React.useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing || !canvasRef.current || mode !== "draw") return;
-    
-    if (activeTool === "pen" || activeTool === "eraser") {
-      const ctx = canvasRef.current.getContext("2d");
-      if (!ctx) return;
-      const currentPos = getPos(e);
-      ctx.lineTo(currentPos.x, currentPos.y);
-      ctx.stroke();
-    }
-  }, [activeTool, getPos, isDrawing, mode]);
+  const handlePointerUp = (e: React.PointerEvent) => {
+      (e.target as Element).releasePointerCapture(e.pointerId);
 
-  const [previewShape, setPreviewShape] = useState<ShapeElement | null>(null);
-
-  const drawPreview = React.useCallback((e: React.MouseEvent | React.TouchEvent) => {
-      if (!isDrawing || !startPos.current) return;
-      
-      const pos = getPos(e);
-      
-      if (activeTool === "pen" || activeTool === "eraser") {
-          draw(e);
-      } else if (activeTool === "line" || activeTool === "circle") {
-          setPreviewShape({
-              id: "preview",
-              type: activeTool,
-              x: startPos.current.x,
-              y: startPos.current.y,
-              endX: pos.x,
-              endY: pos.y,
-              color: activeColor
-          });
+      if (isDragging) {
+          setIsDragging(false);
+          lastPointerPos.current = null;
       }
-  }, [activeColor, activeTool, draw, getPos, isDrawing]);
 
-  const stopDrawing = React.useCallback(() => {
-    if (isDrawing) {
-        if (activeTool === "line" || activeTool === "circle") {
-            if (previewShape) {
-                setShapeElements(prev => [...prev, { ...previewShape, id: crypto.randomUUID() }]);
-                setPreviewShape(null);
-            }
-        }
-        
-        setIsDrawing(false);
-        startPos.current = null;
-        
-        if (canvasRef.current) {
-            const ctx = canvasRef.current.getContext("2d");
-            if (ctx) ctx.globalCompositeOperation = "source-over";
-        }
-    }
-  }, [activeTool, isDrawing, previewShape]);
+      if (draggedElementId) {
+          setDraggedElementId(null);
+          setDraggedElementType(null);
+          dragOffset.current = null;
+      }
 
+      if (isDrawing) {
+          if (activeTool === "pen" || activeTool === "eraser") {
+              if (currentStrokeRef.current.length > 0) {
+                  const newStroke: Stroke = {
+                      id: crypto.randomUUID(),
+                      points: currentStrokeRef.current,
+                      color: activeTool === "eraser" ? "#000000" : activeColor, 
+                      width: activeTool === "eraser" ? 20 : 3,
+                      tool: activeTool
+                  };
+                  setStrokes(prev => [...prev, newStroke]);
+              }
+              currentStrokeRef.current = [];
+          } else if ((activeTool === "line" || activeTool === "circle") && previewShape) {
+              setShapeElements(prev => [...prev, { ...previewShape, id: crypto.randomUUID() }]);
+              setPreviewShape(null);
+          }
+          
+          setIsDrawing(false);
+          startPos.current = null;
+      }
+  };
+
+  // Other Actions
   const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    setStrokes([]);
     setTextElements([]);
     setShapeElements([]);
+    setBackgroundImage(null);
+    renderCanvas();
   };
 
   const handleToolSelect = (tool: Tool) => {
     setActiveTool(tool);
-    if (tool === "text") {
-        setMode("text"); 
-    } else {
-        setMode("draw");
-    }
   };
 
   const updateText = (id: string, newText: string) => {
@@ -284,9 +460,9 @@ export function Scribblepad() {
       setShapeElements(prev => prev.filter(s => s.id !== id));
   };
 
-  const startDragging = (e: React.MouseEvent | React.TouchEvent, id: string, type: "text" | "shape") => {
+  const startDraggingElement = (e: React.MouseEvent | React.TouchEvent, id: string, type: "text" | "shape") => {
     e.stopPropagation();
-    const pos = getPos(e);
+    const worldPos = getWorldPos(e); 
     
     let el;
     if (type === "text") {
@@ -296,68 +472,51 @@ export function Scribblepad() {
     }
 
     if (el) {
-        setDraggingId(id);
-        setDraggingType(type);
-        dragOffset.current = { x: pos.x - el.x, y: pos.y - el.y };
+        setDraggedElementId(id);
+        setDraggedElementType(type);
+        dragOffset.current = { x: worldPos.x - el.x, y: worldPos.y - el.y };
     }
   };
 
-  const onDragMove = (e: React.MouseEvent | React.TouchEvent) => {
-      if (draggingId && dragOffset.current) {
-          const pos = getPos(e);
-          const deltaX = pos.x - dragOffset.current.x;
-          const deltaY = pos.y - dragOffset.current.y;
-
-          if (draggingType === "text") {
-              setTextElements(prev => prev.map(t => 
-                  t.id === draggingId ? { ...t, x: deltaX, y: deltaY } : t
-              ));
-          } else if (draggingType === "shape") {
-              setShapeElements(prev => prev.map(s => {
-                  if (s.id !== draggingId) return s;
-                  const width = s.endX - s.x;
-                  const height = s.endY - s.y;
-                  return { ...s, x: deltaX, y: deltaY, endX: deltaX + width, endY: deltaY + height };
-              }));
-          }
-      }
-  };
-
-  const stopDragging = () => {
-      setDraggingId(null);
-      setDraggingType(null);
-      dragOffset.current = null;
-  };
-
-  const saveScribble = React.useCallback(() => {
+  // Persistence
+  const saveScribble = useCallback(() => {
       if (!canvasRef.current) return;
+      // Thumbnail
       const canvasData = canvasRef.current.toDataURL();
+      
       const newSave: SavedScribble = {
           id: crypto.randomUUID(),
           title: `Untitled Scribble ${savedScribbles.length + 1}`,
           timestamp: Date.now(),
           canvasData,
           textElements,
-          shapeElements
+          shapeElements,
+          strokes
       };
       const newHistory = [newSave, ...savedScribbles];
       setSavedScribbles(newHistory);
       localStorage.setItem("scribble_history", JSON.stringify(newHistory));
       showNotification("Saved", "Scribble saved to history.", "success");
-  }, [savedScribbles, textElements, shapeElements]);
+  }, [savedScribbles, textElements, shapeElements, strokes, showNotification]);
 
   const loadScribble = (scribble: SavedScribble) => {
       clearCanvas();
-      if (!canvasRef.current) return;
-      const ctx = canvasRef.current.getContext("2d");
-      const img = new Image();
-      img.onload = () => {
-          ctx?.drawImage(img, 0, 0);
-      };
-      img.src = scribble.canvasData;
+      
       setTextElements(scribble.textElements);
       setShapeElements(scribble.shapeElements || []);
+      setStrokes(scribble.strokes || []);
+
+      if ((!scribble.strokes || scribble.strokes.length === 0) && scribble.canvasData) {
+          const img = new Image();
+          img.onload = () => {
+              setBackgroundImage(img);
+          };
+          img.src = scribble.canvasData;
+      }
+
       setIsHistoryOpen(false);
+      setPan({ x: 0, y: 0 });
+      setZoom(1);
   };
 
   const updateScribbleTitle = (id: string, newTitle: string) => {
@@ -378,26 +537,11 @@ export function Scribblepad() {
       }
       setConfirmation({ show: false, id: null });
   };
+  
 
   return (
     <div 
-        className="h-full flex flex-col max-w-4xl mx-auto w-full relative group"
-        onMouseMove={(e) => {
-            if (isDrawing) drawPreview(e);
-            if (draggingId) onDragMove(e);
-        }}
-        onMouseUp={() => {
-            stopDrawing();
-            stopDragging();
-        }}
-        onTouchMove={(e) => {
-            if (isDrawing) drawPreview(e);
-            if (draggingId) onDragMove(e);
-        }}
-        onTouchEnd={() => {
-            stopDrawing();
-            stopDragging();
-        }}
+        className="h-full flex flex-col max-w-4xl mx-auto w-full relative group select-none"
     >
         <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-light tracking-tight text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
@@ -417,111 +561,145 @@ export function Scribblepad() {
             </div>
         </div>
 
-      <div className="flex-1 relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]">
-        <canvas
-          ref={canvasRef}
-          onMouseDown={startDrawing}
-          onTouchStart={startDrawing}
-          className={cn(
-            "absolute inset-0 w-full h-full block touch-none z-10",
-            activeTool === "text" ? "cursor-text" : "cursor-crosshair"
-          )}
+      <div className="flex-1 relative rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        
+        {/* Infinite Background Grid */}
+        <div 
+            className="absolute inset-0 w-full h-full pointer-events-none bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)]"
+            style={{
+                backgroundPosition: `${pan.x}px ${pan.y}px`,
+                backgroundSize: `${20 * zoom}px ${20 * zoom}px`
+            }}
         />
 
-        <svg className="absolute inset-0 w-full h-full z-20 pointer-events-none">
-            {shapeElements.map(shape => (
-                <g key={shape.id} className="pointer-events-auto group cursor-grab active:cursor-grabbing"
-                   onMouseDown={(e) => startDragging(e, shape.id, "shape")}
-                   onTouchStart={(e) => startDragging(e, shape.id, "shape")}
-                >
-                    {shape.type === "line" && (
-                        <line 
-                            x1={shape.x} y1={shape.y} x2={shape.endX} y2={shape.endY} 
-                            stroke={shape.color} strokeWidth="3" strokeLinecap="round"
-                            className="hover:stroke-blue-400"
-                        />
-                    )}
-                    {shape.type === "circle" && (
-                        <circle 
-                            cx={shape.x + (shape.endX - shape.x)/2} 
-                            cy={shape.y + (shape.endY - shape.y)/2} 
-                            r={Math.sqrt(Math.pow(shape.endX - shape.x, 2) + Math.pow(shape.endY - shape.y, 2)) / 2} 
-                            stroke={shape.color} strokeWidth="3" fill="transparent"
-                            className="hover:stroke-blue-400"
-                        />
-                    )}
-                    <foreignObject x={shape.endX} y={shape.endY} width="20" height="20" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }}
-                            className="bg-red-500 text-white rounded-full p-1"
-                        >
-                            <X className="w-3 h-3" />
-                        </button>
-                    </foreignObject>
-                </g>
-            ))}
-
-            {previewShape && (
-                <>
-                    {previewShape.type === "line" && (
-                        <line 
-                            x1={previewShape.x} y1={previewShape.y} x2={previewShape.endX} y2={previewShape.endY} 
-                            stroke={previewShape.color} strokeWidth="3" strokeLinecap="round" opacity="0.5"
-                        />
-                    )}
-                    {previewShape.type === "circle" && (
-                        <circle 
-                            cx={previewShape.x + (previewShape.endX - previewShape.x)/2} 
-                            cy={previewShape.y + (previewShape.endY - previewShape.y)/2} 
-                            r={Math.sqrt(Math.pow(previewShape.endX - previewShape.x, 2) + Math.pow(previewShape.endY - previewShape.y, 2)) / 2} 
-                            stroke={previewShape.color} strokeWidth="3" fill="transparent" opacity="0.5"
-                        />
-                    )}
-                </>
+        {/* Interaction Wrapper */}
+        <div 
+            className={cn(
+                "absolute inset-0 w-full h-full touch-none outline-none",
+                activeTool === "hand" || isSpacePressed ? "cursor-grab active:cursor-grabbing" : 
+                activeTool === "text" ? "cursor-text" : "cursor-crosshair"
             )}
-        </svg>
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onWheel={handleWheel}
+        >
+             {/* Drawing Canvas */}
+            <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full block pointer-events-none"
+            />
 
-        {textElements.map((el) => (
+            {/* SVG Layer for Shapes */}
             <div 
-                key={el.id}
-                style={{ 
-                    position: 'absolute', 
-                    left: el.x, 
-                    top: el.y,
-                    transform: 'translate(-50%, -50%)', 
-                    zIndex: 30 
-                }}
+                className="absolute inset-0 w-full h-full pointer-events-none origin-top-left"
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             >
-                <div className="relative group/text">
-                    <div 
-                        className="absolute -left-3 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 opacity-0 group-hover/text:opacity-100 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-opacity"
-                        onMouseDown={(e) => startDragging(e, el.id, "text")}
-                        onTouchStart={(e) => startDragging(e, el.id, "text")}
-                    >
-                        <GripVertical className="w-4 h-4" />
-                    </div>
+                <svg className="overflow-visible w-full h-full">
+                    {shapeElements.map(shape => (
+                        <g key={shape.id} className="pointer-events-auto group cursor-grab active:cursor-grabbing"
+                            onMouseDown={(e) => startDraggingElement(e, shape.id, "shape")}
+                            onTouchStart={(e) => startDraggingElement(e, shape.id, "shape")}
+                        >
+                            {shape.type === "line" && (
+                                <line 
+                                    x1={shape.x} y1={shape.y} x2={shape.endX} y2={shape.endY} 
+                                    stroke={shape.color} strokeWidth="3" strokeLinecap="round"
+                                    className="hover:stroke-blue-400"
+                                />
+                            )}
+                            {shape.type === "circle" && (
+                                <circle 
+                                    cx={shape.x + (shape.endX - shape.x)/2} 
+                                    cy={shape.y + (shape.endY - shape.y)/2} 
+                                    r={Math.sqrt(Math.pow(shape.endX - shape.x, 2) + Math.pow(shape.endY - shape.y, 2)) / 2} 
+                                    stroke={shape.color} strokeWidth="3" fill="transparent"
+                                    className="hover:stroke-blue-400"
+                                />
+                            )}
+                            <foreignObject x={shape.endX} y={shape.endY} width="20" height="20" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); removeShape(shape.id); }}
+                                    className="bg-red-500 text-white rounded-full p-1 cursor-pointer"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </foreignObject>
+                        </g>
+                    ))}
 
-                    <textarea 
-                        autoFocus
-                        value={el.text}
-                        onChange={(e) => updateText(el.id, e.target.value)}
-                        placeholder="Type..."
-                        className="bg-transparent text-zinc-900 dark:text-zinc-100 min-w-[100px] resize-none overflow-hidden outline-none border border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 rounded p-1 placeholder:text-zinc-400 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm"
-                        style={{
-                            height: 'auto',
-                            width: `${Math.max(100, el.text.length * 8 + 20)}px`
-                        }}
-                    />
-                    <button 
-                        onClick={() => removeText(el.id)}
-                        className="absolute -top-3 -right-3 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover/text:opacity-100 transition-opacity"
-                    >
-                        <X className="w-2 h-2" />
-                    </button>
-                </div>
+                    {previewShape && (
+                        <>
+                            {previewShape.type === "line" && (
+                                <line 
+                                    x1={previewShape.x} y1={previewShape.y} x2={previewShape.endX} y2={previewShape.endY} 
+                                    stroke={previewShape.color} strokeWidth="3" strokeLinecap="round" opacity="0.5"
+                                />
+                            )}
+                            {previewShape.type === "circle" && (
+                                <circle 
+                                    cx={previewShape.x + (previewShape.endX - previewShape.x)/2} 
+                                    cy={previewShape.y + (previewShape.endY - previewShape.y)/2} 
+                                    r={Math.sqrt(Math.pow(previewShape.endX - previewShape.x, 2) + Math.pow(previewShape.endY - previewShape.y, 2)) / 2} 
+                                    stroke={previewShape.color} strokeWidth="3" fill="transparent" opacity="0.5"
+                                />
+                            )}
+                        </>
+                    )}
+                </svg>
             </div>
-        ))}
+
+            {/* DOM Layer for Text */}
+            <div 
+                className="absolute inset-0 w-full h-full pointer-events-none origin-top-left"
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+            >
+                 {textElements.map((el) => (
+                    <div 
+                        key={el.id}
+                        className="pointer-events-auto"
+                        style={{ 
+                            position: 'absolute', 
+                            left: el.x, 
+                            top: el.y,
+                            transform: 'translate(-50%, -50%)', 
+                            zIndex: 30 
+                        }}
+                    >
+                        <div className="relative group/text">
+                            <div 
+                                className="absolute -left-4 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-1 opacity-0 group-hover/text:opacity-100 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-opacity"
+                                onMouseDown={(e) => startDraggingElement(e, el.id, "text")}
+                                onTouchStart={(e) => startDraggingElement(e, el.id, "text")}
+                            >
+                                <GripVertical className="w-4 h-4" />
+                            </div>
+
+                            <textarea 
+                                autoFocus
+                                value={el.text}
+                                onChange={(e) => updateText(el.id, e.target.value)}
+                                onKeyDown={(e) => e.stopPropagation()} // Allow typing space without panning
+                                placeholder="Type..."
+                                className="bg-transparent text-zinc-900 dark:text-zinc-100 min-w-[100px] resize-none overflow-hidden outline-none border border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 rounded p-1 placeholder:text-zinc-400 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm"
+                                style={{
+                                    height: 'auto',
+                                    width: `${Math.max(100, el.text.length * 8 + 20)}px`
+                                }}
+                            />
+                            <button 
+                                onClick={() => removeText(el.id)}
+                                className="absolute -top-3 -right-3 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover/text:opacity-100 transition-opacity cursor-pointer"
+                            >
+                                <X className="w-2 h-2" />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
         
+        {/* Palette */}
         <div ref={paletteRef} className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-4">
           <AnimatePresence>
             {isPaletteOpen && (
@@ -532,6 +710,14 @@ export function Scribblepad() {
                 className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-700 p-4 flex flex-col gap-4 mb-2"
               >
                 <div className="flex gap-2 pb-4 border-b border-zinc-100 dark:border-zinc-700">
+                  <button
+                    onClick={() => handleToolSelect("hand")}
+                    className={cn("p-2 rounded-lg transition-colors", activeTool === "hand" ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300")}
+                    title="Pan Tool (Space+Drag)"
+                  >
+                    <Hand className="w-5 h-5" />
+                  </button>
+                  <div className="w-px bg-zinc-200 dark:bg-zinc-600 mx-1" />
                   <button
                     onClick={() => handleToolSelect("pen")}
                     className={cn("p-2 rounded-lg transition-colors", activeTool === "pen" ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300")}
@@ -618,6 +804,7 @@ export function Scribblepad() {
         </div>
       </div>
       
+       {/* History Modal */}
        <AnimatePresence>
            {isHistoryOpen && (
                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -768,12 +955,12 @@ export function Scribblepad() {
 
       <div className="h-12 flex items-center justify-between mt-4">
         <div className="flex gap-6 text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-500">
-          <span>{textElements.length + shapeElements.length} Elements</span>
-          <span>{activeTool.charAt(0).toUpperCase() + activeTool.slice(1)} Mode</span>
-          <span className="text-emerald-500/50">Auto-saved</span>
+          <span>{textElements.length + shapeElements.length + strokes.length} Elements</span>
+          <span>{activeTool === "hand" ? "PAN" : activeTool.toUpperCase()} Mode</span>
+          <span>{Math.round(zoom * 100)}%</span>
         </div>
         <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-600 opacity-50">
-            Infinite Canvas Coming Soon
+            Infinite Canvas Active
         </div>
       </div>
     </div>

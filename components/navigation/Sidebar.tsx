@@ -8,7 +8,8 @@ import {
   CheckSquare, 
   MessageSquare, 
   Sparkles,
-  UserCircle
+  UserCircle,
+  Calendar
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -16,6 +17,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 const navItems = [
   { id: "board", label: "Shared Board", icon: LayoutDashboard },
   { id: "scribble", label: "Scribblepad", icon: PenTool },
+  { id: "calendar", label: "Calendar", icon: Calendar },
   { id: "tasks", label: "Tasks", icon: CheckSquare },
   { id: "comm", label: "Communication", icon: MessageSquare },
   { id: "ai", label: "AI Layer", icon: Sparkles },
