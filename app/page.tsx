@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/navigation/Sidebar";
 
 import { BoardCanvas } from "@/components/board/BoardCanvas";
 import { useUser } from "@/components/auth/UserContext";
+import { UnreadChatWidget } from "@/components/communication/UnreadChatWidget";
 
 export default function Home() {
   return <AppShell />;
@@ -29,6 +30,9 @@ function AppShell() {
           {activeTab === "team" && <TeamSurface />}
           {activeTab === "profile" && <ProfileSurface />}
         </div>
+        
+        {/* Global Widgets */}
+        <UnreadChatWidget onClick={() => setActiveTab("comm")} />
       </main>
     </div>
   );

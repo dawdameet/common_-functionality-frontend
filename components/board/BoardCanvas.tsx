@@ -10,6 +10,8 @@ import { COLOR_THEMES, ColorTheme } from "./Card";
 import { createClient } from "@/utils/supabase/client";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
+import { CalendarEvent } from "./CalendarView";
+
 // --- Types ---
 
 interface BaseItem {
@@ -627,11 +629,96 @@ function PersonalBoardList({ boards, onOpen, onCreate }: { boards: PersonalBoard
   );
 }
 
+// --- Deadline Components ---
+
+type DeadlineEvent = CalendarEvent & { raw_start_time: string };
+
+function Countdown({ targetDate }: { targetDate: string }) {
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const difference = +new Date(targetDate) - +new Date();
+      let timeLeft = {};
+
+      if (difference > 0) {
+        timeLeft = {
+          d: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          h: Math.floor((difference / (1000 * 60 * 60)) % 24),
+          m: Math.floor((difference / 1000 / 60) % 60),
+          s: Math.floor((difference / 1000) % 60),
+        };
+        return `${(timeLeft as any).d}d ${(timeLeft as any).h}h ${(timeLeft as any).m}m`;
+      } else {
+        return "Due now";
+      }
+    };
+
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+    
+    setTimeLeft(calculateTimeLeft());
+
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  return <span>{timeLeft}</span>;
+}
+
+function DeadlineWidget({ deadlines }: { deadlines: DeadlineEvent[] }) {
+  if (deadlines.length === 0) return null;
+
+  const nextDeadline = deadlines[0];
+
+  return (
+    <motion.div 
+      drag
+      dragMomentum={false}
+      className="absolute bottom-32 right-8 z-40 w-64 flex flex-col gap-3 cursor-grab active:cursor-grabbing animate-in fade-in slide-in-from-right-4 duration-700"
+    >
+      {/* Countdown Card */}
+      <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-red-100 dark:border-red-900/20 p-4 rounded-xl shadow-lg group hover:border-red-200 dark:hover:border-red-900/40 transition-colors pointer-events-auto">
+        <div className="flex justify-between items-center mb-1">
+           <h3 className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Next Deadline</h3>
+           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"/>
+        </div>
+        <div className="text-2xl font-light text-zinc-900 dark:text-zinc-100 font-mono tracking-tight">
+          <Countdown targetDate={nextDeadline.raw_start_time} />
+        </div>
+        <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mt-1 truncate" title={nextDeadline.title}>
+          {nextDeadline.title}
+        </div>
+      </div>
+
+      {/* Upcoming List */}
+      {deadlines.length > 1 && (
+        <div className="bg-white/40 dark:bg-zinc-900/40 backdrop-blur-md border border-zinc-200/50 dark:border-zinc-800/50 p-4 rounded-xl max-h-48 overflow-y-auto custom-scrollbar hover:bg-white/60 dark:hover:bg-zinc-900/60 transition-colors pointer-events-auto">
+          <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Upcoming</h3>
+          <div className="flex flex-col gap-2.5">
+            {deadlines.slice(1).map(d => (
+              <div key={d.id} className="group/item flex flex-col gap-0.5">
+                <div className="flex justify-between items-baseline text-sm text-zinc-600 dark:text-zinc-300">
+                  <span className="truncate font-medium">{d.title}</span>
+                  <span className="text-zinc-400 text-xs whitespace-nowrap font-mono ml-2 opacity-70 group-hover/item:opacity-100 transition-opacity">
+                    {new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 // --- Shared Board (Supabase) ---
 
 function SharedBoardView({ onCreatePersonalBoard }: { onCreatePersonalBoard: (title: string, items: BoardItem[]) => void }) {
   const { currentUser } = useUser();
   const [items, setItems] = useState<BoardItem[]>([]);
+  const [deadlines, setDeadlines] = useState<DeadlineEvent[]>([]);
   const [isDrafting, setIsDrafting] = useState(false);
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const supabase = createClient();
@@ -639,7 +726,7 @@ function SharedBoardView({ onCreatePersonalBoard }: { onCreatePersonalBoard: (ti
 
   // Fetch & Realtime
   useEffect(() => {
-    // Initial Fetch
+    // Initial Fetch Board Items
     const fetchItems = async () => {
       const { data } = await supabase.from('board_items').select('*').neq('status', 'archived');
       if (data) {
@@ -657,6 +744,31 @@ function SharedBoardView({ onCreatePersonalBoard }: { onCreatePersonalBoard: (ti
       }
     };
     fetchItems();
+
+    // Fetch Deadlines
+    const fetchDeadlines = async () => {
+        const todayStr = new Date().toISOString();
+        const { data } = await supabase
+            .from('calendar_events')
+            .select('*')
+            .eq('type', 'deadline')
+            .gte('start_time', todayStr)
+            .order('start_time', { ascending: true });
+        
+        if (data) {
+             setDeadlines(data.map(e => ({
+                id: e.id,
+                title: e.title,
+                type: e.type as any,
+                date: new Date(e.start_time).toISOString().split('T')[0],
+                time: e.start_time.includes('T') ? new Date(e.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined,
+                isGlobal: e.is_global,
+                authorId: e.owner_id,
+                raw_start_time: e.start_time
+            })));
+        }
+    };
+    fetchDeadlines();
 
     // Realtime Subscription
     const channel = supabase.channel('board_changes')
@@ -690,6 +802,10 @@ function SharedBoardView({ onCreatePersonalBoard }: { onCreatePersonalBoard: (ti
         } else if (payload.eventType === 'DELETE') {
           setItems(prev => prev.filter(i => i.id !== payload.old.id));
         }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, () => {
+          // Refetch deadlines on any calendar change
+          fetchDeadlines();
       })
       .subscribe();
 
@@ -785,11 +901,15 @@ function SharedBoardView({ onCreatePersonalBoard }: { onCreatePersonalBoard: (ti
         readOnly={!isModerator}
         title="Shared Board"
       />
+      
+      {/* Deadline Widget */}
+      <DeadlineWidget deadlines={deadlines} />
 
       <header className="absolute top-4 left-4 md:top-12 md:left-12 z-10 pointer-events-none">
         <h1 className="text-zinc-900 dark:text-zinc-100 text-2xl md:text-3xl font-light tracking-tight pointer-events-auto">Shared Board</h1>
         <p className="text-zinc-500 mt-1 md:mt-2 text-sm md:text-base pointer-events-auto">The canonical reality of your project.</p>
       </header>
+
 
       {/* Draft PR Button - Hidden for now or keep as "Draft Idea" for transparency? 
            Let's keep it but maybe restricted? Or let General users draft, but only Mod sees?
