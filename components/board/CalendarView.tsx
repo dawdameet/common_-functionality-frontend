@@ -3,8 +3,9 @@
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AddEventModal } from "./AddEventModal";
 
-interface CalendarEvent {
+export interface CalendarEvent {
   id: string;
   title: string;
   date: string; // YYYY-MM-DD
@@ -32,6 +33,8 @@ const initialEvents: CalendarEvent[] = [
 export function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -59,6 +62,19 @@ export function CalendarView() {
     return events.filter(e => e.date === dateStr);
   };
 
+  const handleAddEvent = (dateStr?: string) => {
+    setSelectedDate(dateStr);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveEvent = (newEvent: Omit<CalendarEvent, "id">) => {
+    const event: CalendarEvent = {
+      ...newEvent,
+      id: Math.random().toString(36).substr(2, 9),
+    };
+    setEvents([...events, event]);
+  };
+
   return (
     <div className="w-full h-full bg-white dark:bg-zinc-950 p-4 md:p-8 overflow-y-auto">
       <div className="max-w-6xl mx-auto h-full flex flex-col">
@@ -80,7 +96,10 @@ export function CalendarView() {
             >
               <ChevronRight className="w-5 h-5" />
             </button>
-            <button className="ml-4 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium shadow-lg hover:scale-105 transition-transform flex items-center gap-2">
+            <button
+              onClick={() => handleAddEvent()}
+              className="ml-4 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+            >
               <Plus className="w-4 h-4" />
               <span>Add Event</span>
             </button>
@@ -111,48 +130,71 @@ export function CalendarView() {
 
             let displayDay = dayNumber;
             if (dayNumber <= 0) {
-                displayDay = daysInPrevMonth + dayNumber;
+              displayDay = daysInPrevMonth + dayNumber;
             } else if (dayNumber > daysInMonth) {
-                displayDay = dayNumber - daysInMonth;
+              displayDay = dayNumber - daysInMonth;
             }
 
             return (
               <div
                 key={i}
                 className={cn(
-                  "bg-white dark:bg-zinc-950 min-h-[120px] p-2 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50 flex flex-col gap-1",
+                  "group bg-white dark:bg-zinc-950 min-h-[120px] p-2 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50 flex flex-col gap-1 cursor-pointer",
                   !isCurrentMonth && "bg-zinc-50/50 dark:bg-zinc-900/20",
                   isSunday && "bg-red-50/30 dark:bg-red-900/5"
                 )}
+                onClick={() => {
+                  if (isCurrentMonth) {
+                    handleAddEvent(`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}`);
+                  }
+                }}
               >
                 <div className="flex justify-between items-start">
-                    <span
+                  <span
                     className={cn(
-                        "w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium",
-                        isCurrentMonth && isToday(dayNumber)
+                      "w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium transition-colors",
+                      isCurrentMonth && isToday(dayNumber)
                         ? "bg-blue-600 text-white"
-                        : isCurrentMonth 
-                            ? cn("text-zinc-700 dark:text-zinc-300", isSunday && "text-red-500 dark:text-red-400")
-                            : cn("text-zinc-400 dark:text-zinc-600 opacity-50", isSunday && "text-red-400/50 dark:text-red-400/50")
+                        : isCurrentMonth
+                          ? cn("text-zinc-700 dark:text-zinc-300 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-800", isSunday && "text-red-500 dark:text-red-400")
+                          : cn("text-zinc-400 dark:text-zinc-600 opacity-50", isSunday && "text-red-400/50 dark:text-red-400/50")
                     )}
-                    >
+                  >
                     {displayDay}
-                    </span>
+                  </span>
+                  {isCurrentMonth && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddEvent(`${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(dayNumber).padStart(2, "0")}`);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-all text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
                 {isCurrentMonth && (
-                    <div className="flex-1 flex flex-col gap-1 mt-1 overflow-y-auto">
-                        {dayEvents.map(event => (
-                            <div key={event.id} className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate font-medium border border-blue-200 dark:border-blue-800/50">
-                                {event.time} {event.title}
-                            </div>
-                        ))}
-                    </div>
+                  <div className="flex-1 flex flex-col gap-1 mt-1 overflow-y-auto">
+                    {dayEvents.map(event => (
+                      <div key={event.id} className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate font-medium border border-blue-200 dark:border-blue-800/50">
+                        {event.time} {event.title}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             );
           })}
         </div>
       </div>
+      <AddEventModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveEvent}
+        initialDate={selectedDate}
+      />
     </div>
   );
 }
+
