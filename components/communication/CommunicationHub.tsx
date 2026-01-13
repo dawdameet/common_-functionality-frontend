@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Hash, Send, User, AtSign, Trash2 } from "lucide-react";
+import { Plus, Hash, Send, User, AtSign, Trash2, Shield } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useUser } from "../auth/UserContext";
@@ -247,33 +247,63 @@ export function CommunicationHub() {
   };
 
   const publicChannels = channels.filter(c => c.type !== 'hallway');
-  const hallwayChats = channels.filter(c => c.type === 'hallway');
+  const allHallwayChats = channels.filter(c => c.type === 'hallway');
+  const modChat = allHallwayChats.find(c => c.name === 'Mod Chat');
+  const otherHallwayChats = allHallwayChats.filter(c => c.name !== 'Mod Chat');
+  
   const activeChannel = channels.find(c => c.id === activeChannelId);
 
   return (
     <div className="flex h-full w-full gap-6">
+      {/* Sidebar */}
       <div className="w-64 flex flex-col gap-6">
+        
+        {/* Public Channels */}
         <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between px-2">
               <h2 className="text-xs font-bold uppercase text-zinc-400 tracking-wider">Channels</h2>
               {isModerator && (
-                <button onClick={() => setIsCreatingChannel(true)} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+                <button
+                  onClick={() => setIsCreatingChannel(true)}
+                  className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                >
                   <Plus className="w-4 h-4" />
                 </button>
               )}
             </div>
+            
+            {/* Create Channel Input ... */}
             {isCreatingChannel && (
               <form onSubmit={handleCreateChannel} className="px-2 mb-2">
-                <input autoFocus value={newChannelName} onChange={e => setNewChannelName(e.target.value)} onBlur={() => !newChannelName && setIsCreatingChannel(false)} placeholder="Channel name..." className="w-full px-2 py-1 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded outline-none focus:ring-1 ring-zinc-400" />
+                <input
+                  autoFocus
+                  value={newChannelName}
+                  onChange={e => setNewChannelName(e.target.value)}
+                  onBlur={() => !newChannelName && setIsCreatingChannel(false)}
+                  placeholder="Channel name..."
+                  className="w-full px-2 py-1 text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded outline-none focus:ring-1 ring-zinc-400"
+                />
               </form>
             )}
+
             <div className="flex flex-col gap-1">
               {publicChannels.map(channel => (
-                <button key={channel.id} onClick={() => setActiveChannelId(channel.id)} className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left", activeChannelId === channel.id ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-700 dark:hover:text-zinc-300")}>
+                <button
+                  key={channel.id}
+                  onClick={() => setActiveChannelId(channel.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left",
+                    activeChannelId === channel.id
+                      ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                      : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  )}
+                >
                   <span className="relative">
                     <Hash className="w-4 h-4 opacity-50" />
                     {activeChannelId !== channel.id && unreadCounts[channel.id] > 0 && (
-                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">{unreadCounts[channel.id]}</span>
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">
+                        {unreadCounts[channel.id] > 9 ? '' : unreadCounts[channel.id]}
+                      </span>
                     )}
                   </span>
                   {channel.name}
@@ -282,21 +312,62 @@ export function CommunicationHub() {
             </div>
         </div>
 
+        {/* Hallway */}
         <div className="flex flex-col gap-2 flex-1 min-h-0">
              <div className="flex items-center justify-between px-2">
               <h2 className="text-xs font-bold uppercase text-zinc-400 tracking-wider">Hallway</h2>
             </div>
+            
             <div className="pl-3 flex flex-col gap-1 overflow-y-auto custom-scrollbar">
-                <button onClick={() => setIsHallwayModalOpen(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left border border-dashed border-zinc-200 dark:border-zinc-800">
+                {/* Mod Chat Pinned */}
+                {modChat && (
+                  <button
+                    key={modChat.id}
+                    onClick={() => setActiveChannelId(modChat.id)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left border mb-2",
+                      activeChannelId === modChat.id
+                        ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100 border-indigo-200 dark:border-indigo-800"
+                        : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-indigo-200 dark:hover:border-indigo-800"
+                    )}
+                  >
+                    <span className="relative text-indigo-500">
+                      <Shield className="w-4 h-4" />
+                       {activeChannelId !== modChat.id && unreadCounts[modChat.id] > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">
+                          {unreadCounts[modChat.id]}
+                        </span>
+                      )}
+                    </span>
+                    <span className="truncate font-semibold">Mod Chat</span>
+                  </button>
+                )}
+
+                <button
+                    onClick={() => setIsHallwayModalOpen(true)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors text-left border border-dashed border-zinc-200 dark:border-zinc-800"
+                >
                     <Plus className="w-4 h-4" />
                     <span>Start Chat</span>
                 </button>
-                {hallwayChats.map(channel => (
-                <button key={channel.id} onClick={() => setActiveChannelId(channel.id)} className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left", activeChannelId === channel.id ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-700 dark:hover:text-zinc-300")}>
+
+                {otherHallwayChats.map(channel => (
+                <button
+                  key={channel.id}
+                  onClick={() => setActiveChannelId(channel.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left",
+                    activeChannelId === channel.id
+                      ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                      : "text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  )}
+                >
                   <span className="relative">
                     <User className="w-3 h-3 opacity-50" />
                      {activeChannelId !== channel.id && unreadCounts[channel.id] > 0 && (
-                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">{unreadCounts[channel.id]}</span>
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center text-[8px] text-white font-bold">
+                        {unreadCounts[channel.id] > 9 ? '' : unreadCounts[channel.id]}
+                      </span>
                     )}
                   </span>
                   <span className="truncate">{channel.name}</span>
@@ -304,16 +375,42 @@ export function CommunicationHub() {
               ))}
             </div>
         </div>
+
       </div>
 
+      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm relative">
+
+        {/* Header */}
         <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 backdrop-blur flex justify-between items-center">
           <div className="flex items-center gap-2">
-            {activeChannel?.type === 'hallway' ? <User className="w-5 h-5 text-zinc-400" /> : <Hash className="w-5 h-5 text-zinc-400" />}
-            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{activeChannel?.name || "Select a channel"}</h3>
-            {activeChannel?.type === 'hallway' && <span className="text-xs text-zinc-400 ml-2 font-normal bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">Expires in 3h</span>}
+            {activeChannel?.name === 'Mod Chat' ? (
+                <Shield className="w-5 h-5 text-indigo-500" />
+            ) : activeChannel?.type === 'hallway' ? (
+                <User className="w-5 h-5 text-zinc-400" />
+            ) : (
+                <Hash className="w-5 h-5 text-zinc-400" />
+            )}
+            
+            <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+              {activeChannel?.name || "Select a channel"}
+            </h3>
+            
+            {activeChannel?.type === 'hallway' && activeChannel.name !== 'Mod Chat' && (
+                <span className="text-xs text-zinc-400 ml-2 font-normal flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">
+                    Expires in 3h
+                </span>
+            )}
           </div>
-          {activeChannel?.type === 'hallway' && <button onClick={deleteCurrentChat} className="text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-1 rounded transition-colors">End Chat</button>}
+          
+          {activeChannel?.type === 'hallway' && activeChannel.name !== 'Mod Chat' && (
+              <button 
+                onClick={deleteCurrentChat}
+                className="text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-1 rounded transition-colors"
+              >
+                  End Chat
+              </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar relative">
