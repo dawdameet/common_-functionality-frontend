@@ -2,6 +2,27 @@ const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
 
+// Load .env.local manually since we don't have dotenv installed
+try {
+    const envFile = path.join(__dirname, '..', '.env.local');
+    if (fs.existsSync(envFile)) {
+        const envConfig = fs.readFileSync(envFile, 'utf8');
+        envConfig.split('\n').forEach(line => {
+            const match = line.match(/^([^=]+)=(.*)$/);
+            if (match) {
+                const key = match[1].trim();
+                const value = match[2].trim().replace(/^["'](.*)["']$/, '$1'); // Remove quotes
+                if (!process.env[key]) {
+                    process.env[key] = value;
+                }
+            }
+        });
+        console.log('Loaded environment from .env.local');
+    }
+} catch (e) {
+    console.warn('Could not load .env.local:', e.message);
+}
+
 async function migrate() {
     const connectionString = process.env.DATABASE_URL || process.argv[2];
 

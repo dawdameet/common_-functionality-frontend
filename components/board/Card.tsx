@@ -114,9 +114,7 @@ export function Card({
   };
 
   const handleDelete = () => {
-    if (confirm("Are you sure you want to delete this note?")) {
-      onDelete?.(id);
-    }
+    onDelete?.(id);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -214,6 +212,19 @@ export function Card({
             <span className="text-[10px]">v1.0</span>
             <span className="text-[10px]">JAN 12</span>
           </div>
+
+          {isEditable && onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete();
+              }}
+              className="absolute top-2 right-2 p-1.5 bg-white/50 dark:bg-black/50 hover:bg-red-500 hover:text-white rounded-lg text-zinc-400 opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+              title="Delete"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       )}
     </motion.div>

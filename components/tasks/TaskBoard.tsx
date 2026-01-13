@@ -6,7 +6,9 @@ import { Calendar, User, Link as LinkIcon, Shield } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { AddTaskModal } from "./AddTaskModal";
+import { TaskDetailsModal } from "./TaskDetailsModal";
 import { useUser } from "../auth/UserContext";
+import { useNotifications } from "../notifications/NotificationContext";
 
 interface Task {
   id: string;
@@ -35,8 +37,10 @@ const columns = [
 
 export function TaskBoard() {
   const { currentUser } = useUser();
+  const { markTasksAsRead } = useNotifications();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const supabase = createClient();
 
   const fetchTasks = async () => {
@@ -62,6 +66,11 @@ export function TaskBoard() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Mark as read when entering the board
+  useEffect(() => {
+    markTasksAsRead();
   }, []);
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -123,8 +132,9 @@ export function TaskBoard() {
                       key={task.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, task.id)}
+                      onClick={() => setSelectedTask(task)}
                       className={cn(
-                        "group p-5 rounded-2xl border transition-all cursor-grab active:cursor-grabbing shadow-sm dark:shadow-none relative overflow-hidden",
+                        "group p-5 rounded-2xl border transition-all cursor-pointer active:cursor-grabbing shadow-sm dark:shadow-none relative overflow-hidden",
                         isGlobal
                           ? "bg-zinc-50 dark:bg-zinc-900 border-l-4 border-l-blue-500 border-y-zinc-200 border-r-zinc-200 dark:border-y-zinc-800 dark:border-r-zinc-800"
                           : "bg-white dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/50 hover:border-zinc-300 dark:hover:border-zinc-700/50"
@@ -192,6 +202,11 @@ export function TaskBoard() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveTask}
         currentUser={currentUser}
+      />
+
+      <TaskDetailsModal
+        task={selectedTask}
+        onClose={() => setSelectedTask(null)}
       />
     </>
   );

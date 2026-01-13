@@ -180,6 +180,7 @@ export function BoardCanvas() {
           onBack={() => setViewMode("personal-list")}
         />
       )}
+
     </div>
   );
 }
@@ -289,6 +290,45 @@ function NotificationModal({ message, onClose, type = 'success' }: { message: st
         >
           Got it
         </button>
+      </motion.div>
+    </div>
+  );
+}
+
+function ConfirmModal({ message, onClose, onConfirm }: { message: string, onClose: () => void, onConfirm: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center text-center"
+      >
+        <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+          <Trash2 className="w-6 h-6" />
+        </div>
+
+        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+          Confirm Deletion
+        </h3>
+        <p className="text-sm text-zinc-500 mb-6">
+          {message}
+        </p>
+
+        <div className="flex gap-3 w-full">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-xl font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
+          >
+            Delete
+          </button>
+        </div>
       </motion.div>
     </div>
   );
@@ -990,7 +1030,18 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
   const [isDrawing, setIsDrawing] = useState(false);
   const [previewShape, setPreviewShape] = useState<ShapeItem | null>(null);
   const [previewPencil, setPreviewPencil] = useState<PencilItem | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
+  const requestDelete = (id: string) => {
+    setDeletingItemId(id);
+  };
+
+  const confirmDelete = () => {
+    if (deletingItemId) {
+      onDelete(deletingItemId);
+      setDeletingItemId(null);
+    }
+  };
   // Temp item state for smooth dragging without constant parent updates
   const [dragState, setDragState] = useState<{ id: string, startX: number, startY: number, initialItem: BoardItem } | null>(null);
   const [tempItem, setTempItem] = useState<BoardItem | null>(null);
@@ -1032,7 +1083,7 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
 
     // Eraser Logic
     if (activeTool === "eraser" && targetId) {
-      onDelete(targetId);
+      requestDelete(targetId);
       e.stopPropagation();
       return;
     }
@@ -1325,7 +1376,13 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
                 <div
                   key={item.id}
                   style={{ position: 'absolute', left: item.x, top: item.y, zIndex: 10 }}
-                  onPointerDown={(e) => e.stopPropagation()}
+                  data-id={item.id}
+                  onPointerDown={(e) => {
+                    // Stop propagation unless we are using eraser
+                    if (activeTool !== 'eraser') {
+                      e.stopPropagation();
+                    }
+                  }}
                 >
                   <Card
                     id={item.id}
@@ -1335,7 +1392,7 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
                     customColor={item.customColor}
                     isEditable={!readOnly}
                     onUpdate={!readOnly ? handleNoteUpdate : undefined}
-                    onDelete={!readOnly ? handleNoteDelete : undefined}
+                    onDelete={!readOnly ? requestDelete : undefined}
                   />
                 </div>
               );
@@ -1407,6 +1464,16 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {deletingItemId && (
+          <ConfirmModal
+            message="Are you sure you want to delete this item? This cannot be undone."
+            onClose={() => setDeletingItemId(null)}
+            onConfirm={confirmDelete}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
