@@ -2,9 +2,13 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Card, CardType } from "./Card";
-import { GitPullRequest, Sparkles, Plus, Layout, ArrowLeft, Type, StickyNote, Minus, Circle as CircleIcon, MousePointer2, Move, Trash2 } from "lucide-react";
+import { GitPullRequest, Sparkles, Plus, Layout, ArrowLeft, Type, StickyNote, Minus, Circle as CircleIcon, MousePointer2, Move, Trash2, Pencil, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useUser } from "../auth/UserContext";
+import { COLOR_THEMES, ColorTheme } from "./Card";
+import { createClient } from "@/utils/supabase/client";
+import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 // --- Types ---
 
@@ -28,18 +32,25 @@ interface TextItem extends BaseItem {
 }
 
 interface ShapeItem extends BaseItem {
-  type: "line" | "circle";
+  type: "line" | "circle" | "arrow";
   endX: number;
   endY: number;
   color?: string;
 }
 
-type BoardItem = NoteItem | TextItem | ShapeItem;
+interface PencilItem extends BaseItem {
+  type: "pencil";
+  points: { x: number, y: number }[];
+  color?: string;
+}
 
-const isNote = (item: BoardItem): item is NoteItem => 
+type BoardItem = NoteItem | TextItem | ShapeItem | PencilItem;
+
+const isNote = (item: BoardItem): item is NoteItem =>
   ["note", "idea", "decision", "constraint", "summary"].includes(item.type);
 const isText = (item: BoardItem): item is TextItem => item.type === "text";
-const isShape = (item: BoardItem): item is ShapeItem => ["line", "circle"].includes(item.type);
+const isShape = (item: BoardItem): item is ShapeItem => ["line", "circle", "arrow"].includes(item.type);
+const isPencil = (item: BoardItem): item is PencilItem => item.type === "pencil";
 
 interface PersonalBoard {
   id: string;
@@ -103,7 +114,7 @@ export function BoardCanvas() {
 
   const updateActiveBoard = (items: BoardItem[]) => {
     if (!activeBoardId) return;
-    setPersonalBoards(boards => 
+    setPersonalBoards(boards =>
       boards.map(b => b.id === activeBoardId ? { ...b, items } : b)
     );
   };
@@ -132,29 +143,29 @@ export function BoardCanvas() {
           </>
         )}
         {(viewMode === "personal-list" || viewMode === "personal-board") && (
-           <button
-             onClick={() => setViewMode("shared")}
-             className="px-4 py-2 bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-white/80 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
-           >
-             <Layout className="w-4 h-4" />
-             <span>General Board</span>
-           </button>
+          <button
+            onClick={() => setViewMode("shared")}
+            className="px-4 py-2 bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm font-medium hover:bg-white/80 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2"
+          >
+            <Layout className="w-4 h-4" />
+            <span>General Board</span>
+          </button>
         )}
       </div>
 
       {viewMode === "shared" && <SharedBoardView />}
-      
+
       {viewMode === "personal-list" && (
-        <PersonalBoardList 
-          boards={personalBoards} 
-          onOpen={openBoard} 
-          onCreate={createPersonalBoard} 
+        <PersonalBoardList
+          boards={personalBoards}
+          onOpen={openBoard}
+          onCreate={createPersonalBoard}
         />
       )}
-      
+
       {viewMode === "personal-board" && activeBoard && (
-        <PersonalBoardView 
-          board={activeBoard} 
+        <PersonalBoardView
+          board={activeBoard}
           onUpdate={updateActiveBoard}
           onBack={() => setViewMode("personal-list")}
         />
@@ -195,11 +206,11 @@ function InfiniteCanvas({ children, className, onPanZoom }: InfiniteCanvasProps)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    
+
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) e.preventDefault();
     };
-    
+
     container.addEventListener('wheel', onWheel, { passive: false });
     return () => container.removeEventListener('wheel', onWheel);
   }, []);
@@ -216,10 +227,10 @@ function InfiniteCanvas({ children, className, onPanZoom }: InfiniteCanvasProps)
     const deltaX = e.clientX - lastPos.current.x;
     const deltaY = e.clientY - lastPos.current.y;
     lastPos.current = { x: e.clientX, y: e.clientY };
-    
+
     setPan(prev => {
-        const newPan = { x: prev.x + deltaX, y: prev.y + deltaY };
-        return newPan;
+      const newPan = { x: prev.x + deltaX, y: prev.y + deltaY };
+      return newPan;
     });
   };
 
@@ -233,7 +244,7 @@ function InfiniteCanvas({ children, className, onPanZoom }: InfiniteCanvasProps)
   }, [pan, zoom, onPanZoom]);
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={cn("w-full h-full overflow-hidden cursor-grab active:cursor-grabbing touch-none bg-[radial-gradient(#e4e4e7_1px,transparent_1px)] dark:bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:20px_20px]", className)}
       onWheel={handleWheel}
@@ -241,11 +252,11 @@ function InfiniteCanvas({ children, className, onPanZoom }: InfiniteCanvasProps)
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       style={{
-          backgroundPosition: `${pan.x}px ${pan.y}px`,
-          backgroundSize: `${20 * zoom}px ${20 * zoom}px`
+        backgroundPosition: `${pan.x}px ${pan.y}px`,
+        backgroundSize: `${20 * zoom}px ${20 * zoom}px`
       }}
     >
-      <div 
+      <div
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transformOrigin: "0 0",
@@ -269,7 +280,7 @@ function PersonalBoardList({ boards, onOpen, onCreate }: { boards: PersonalBoard
     <div className="w-full h-full p-8 md:p-12 overflow-y-auto bg-white dark:bg-zinc-950">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-light tracking-tight text-zinc-900 dark:text-zinc-100 mb-8">My Boards</h1>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <button
             onClick={onCreate}
@@ -304,82 +315,327 @@ function PersonalBoardList({ boards, onOpen, onCreate }: { boards: PersonalBoard
   );
 }
 
-function SharedBoardView() {
-  const [items] = useState<NoteItem[]>(initialSharedItems);
-  const [isDrafting, setIsDrafting] = useState(false);
-  const [submissionStatus, setSubmissionStatus] = useState<"idle" | "success">("idle");
+// --- Shared Board (Supabase) ---
 
-  const handleSubmit = () => {
-    setSubmissionStatus("success");
-    setTimeout(() => {
-      setIsDrafting(false);
-      setSubmissionStatus("idle");
-    }, 2000);
+function SharedBoardView() {
+  const { currentUser } = useUser();
+  const [items, setItems] = useState<BoardItem[]>([]);
+  const [isDrafting, setIsDrafting] = useState(false);
+  const supabase = createClient();
+  const isModerator = currentUser.role === "moderator";
+
+  // Fetch & Realtime
+  useEffect(() => {
+    // Initial Fetch
+    const fetchItems = async () => {
+      const { data } = await supabase.from('board_items').select('*').neq('status', 'archived');
+      if (data) {
+        const parsedItems: BoardItem[] = data.map(row => ({
+          id: row.id,
+          type: row.type as any, // Cast, we ensured types match
+          title: row.title,
+          content: row.content,
+          x: row.position.x,
+          y: row.position.y,
+          ...row.meta // Spread color, endX, endY, points
+        }));
+        setItems(parsedItems);
+      }
+    };
+    fetchItems();
+
+    // Realtime Subscription
+    const channel = supabase.channel('board_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_items' }, (payload: RealtimePostgresChangesPayload<any>) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new;
+          const newItem: BoardItem = {
+            id: row.id,
+            type: row.type as any,
+            title: row.title,
+            content: row.content,
+            x: row.position.x,
+            y: row.position.y,
+            ...row.meta
+          };
+          setItems(prev => [...prev.filter(i => i.id !== newItem.id), newItem]);
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new;
+          const updatedItem: BoardItem = {
+            id: row.id,
+            type: row.type as any,
+            title: row.title,
+            content: row.content,
+            x: row.position.x,
+            y: row.position.y,
+            ...row.meta
+          };
+          setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
+        } else if (payload.eventType === 'DELETE') {
+          setItems(prev => prev.filter(i => i.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // CRUD Handlers
+  const handleCreate = async (item: BoardItem) => {
+    // Prepare payload
+    const { id, type, title, content, x, y, ...meta } = item as any;
+    const payload = {
+      id, // Use client-generated ID for optimistic consistency? Or let DB gen?
+      // Optimistic ID is fine if UUID.
+      title: title || '',
+      content: content || '',
+      type,
+      author_id: currentUser.id,
+      status: 'approved', // Mods auto-approve
+      position: { x, y },
+      meta: meta // color, endX, endY, points
+    };
+
+    // Optimistic Update
+    setItems(prev => [...prev, item]);
+
+    await supabase.from('board_items').insert(payload);
+  };
+
+  const handleUpdate = async (item: BoardItem) => {
+    // Optimistic
+    setItems(prev => prev.map(i => i.id === item.id ? item : i));
+
+    const { id, type, title, content, x, y, ...meta } = item as any;
+    await supabase.from('board_items').update({
+      title, content, position: { x, y }, meta
+    }).eq('id', id);
+  };
+
+  const handleDelete = async (id: string) => {
+    // Optimistic
+    setItems(prev => prev.filter(i => i.id !== id));
+    await supabase.from('board_items').delete().eq('id', id);
   };
 
   return (
     <div className="w-full h-full relative bg-white dark:bg-zinc-950">
-       <InfiniteCanvas>
-        {items.map((item) => (
-          <div 
-            key={item.id} 
-            style={{ position: 'absolute', left: item.x, top: item.y, zIndex: 1 }}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <Card 
-              id={item.id}
-              type={item.type}
-              title={item.title}
-              content={item.content}
-            />
-          </div>
-        ))}
-       </InfiniteCanvas>
+      <CanvasBoard
+        items={items}
+        onCreate={handleCreate}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+        readOnly={!isModerator}
+        title="Shared Board"
+      />
 
-       <header className="absolute top-4 left-4 md:top-12 md:left-12 z-10 pointer-events-none">
+      <header className="absolute top-4 left-4 md:top-12 md:left-12 z-10 pointer-events-none">
         <h1 className="text-zinc-900 dark:text-zinc-100 text-2xl md:text-3xl font-light tracking-tight pointer-events-auto">Shared Board</h1>
         <p className="text-zinc-500 mt-1 md:mt-2 text-sm md:text-base pointer-events-auto">The canonical reality of your project.</p>
       </header>
 
-      <div className="fixed md:absolute bottom-20 md:bottom-8 right-4 md:right-8 z-20">
-        <button 
-          onClick={() => setIsDrafting(true)}
-          className="flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xl hover:scale-105 transition-transform font-medium text-sm md:text-base"
-        >
-          <GitPullRequest className="w-4 h-4" />
-          <span>Draft Idea (PR)</span>
-        </button>
-      </div>
-      
+      {/* Draft PR Button - Hidden for now or keep as "Draft Idea" for transparency? 
+           Let's keep it but maybe restricted? Or let General users draft, but only Mod sees?
+           For V1 scope, let's keep it simple.
+       */}
+      {!isModerator && (
+        <div className="fixed md:absolute bottom-20 md:bottom-8 right-4 md:right-8 z-20">
+          <button
+            onClick={() => setIsDrafting(true)}
+            className="flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xl hover:scale-105 transition-transform font-medium text-sm md:text-base animate-in fade-in slide-in-from-bottom-4"
+          >
+            <GitPullRequest className="w-4 h-4" />
+            <span>Draft Idea (PR)</span>
+          </button>
+        </div>
+      )}
+
       <AnimatePresence>
         {isDrafting && (
-           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-12">
-             <motion.div 
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-12">
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white dark:bg-zinc-900 rounded-2xl p-8 w-full max-w-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 relative overflow-hidden min-h-[400px] flex flex-col justify-center"
+              className="bg-white dark:bg-zinc-900 rounded-2xl p-8 w-full max-w-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 relative overflow-hidden flex flex-col"
             >
-                <div className="flex flex-col h-full">
-                    <h2 className="text-xl font-semibold mb-6">Mock Draft (Disabled in this view)</h2>
-                    <button onClick={() => setIsDrafting(false)} className="mt-auto px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded">Close</button>
-                </div>
+              <DraftProposalForm
+                onClose={() => setIsDrafting(false)}
+                onSubmit={async (data) => {
+                  const { error } = await supabase.from('board_items').insert({
+                    title: data.title,
+                    content: data.content,
+                    type: data.type,
+                    author_id: currentUser.id,
+                    status: 'pending',
+                    position: { x: 0, y: 0 } // Default position, Mods will move it
+                  });
+                  if (!error) {
+                    setIsDrafting(false);
+                    // Optimistic update?
+                    // Realtime will catch it if we are subscribed.
+                  } else {
+                    alert("Failed to submit: " + error.message);
+                  }
+                }}
+              />
             </motion.div>
-           </div>
+          </div>
         )}
       </AnimatePresence>
     </div>
   );
 }
 
+
+function DraftProposalForm({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => void }) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [type, setType] = useState<"idea" | "decision" | "constraint">("idea");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    await onSubmit({ title, content, type });
+    setIsSubmitting(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col h-full gap-4">
+      <div className="flex justify-between items-center mb-2">
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Draft Proposal</h2>
+        <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+          <Trash2 className="w-5 h-5 rotate-45" />
+        </button>
+      </div>
+
+      <p className="text-sm text-zinc-500 mb-4">
+        Propose an Item. It will appear as 'Pending' until a Moderator approves it.
+      </p>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 mb-1">Type</label>
+          <div className="flex gap-2">
+            {(["idea", "decision", "constraint"] as const).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setType(t)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg border text-sm capitalize transition-colors",
+                  type === t
+                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
+                    : "border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 mb-1">Title</label>
+          <input
+            required
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 ring-zinc-500/20"
+            placeholder="Short title"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-zinc-500 mb-1">Content</label>
+          <textarea
+            required
+            value={content}
+            onChange={e => setContent(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 ring-zinc-500/20 min-h-[100px] resize-none"
+            placeholder="Describe your idea..."
+          />
+        </div>
+      </div>
+
+      <div className="mt-auto flex justify-end gap-2 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="px-4 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:opacity-90 disabled:opacity-50"
+        >
+          {isSubmitting ? "Submitting..." : "Submit Proposal"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, onUpdate: (items: BoardItem[]) => void, onBack: () => void }) {
-  const [activeTool, setActiveTool] = useState<"cursor" | "note" | "text" | "line" | "circle">("cursor");
+  // Adapter for new callbacks
+  const handleCreate = (item: BoardItem) => onUpdate([...board.items, item]);
+  const handleUpdate = (item: BoardItem) => onUpdate(board.items.map(i => i.id === item.id ? item : i));
+  const handleDelete = (id: string) => onUpdate(board.items.filter(i => i.id !== id));
+
+  return (
+    <div className="w-full h-full relative">
+      <CanvasBoard
+        items={board.items}
+        onCreate={handleCreate}
+        onUpdate={handleUpdate}
+        onDelete={handleDelete}
+        readOnly={false}
+        title={board.title}
+      />
+
+      <div className="absolute top-4 left-4 md:top-12 md:left-12 z-30 flex items-center gap-4 pointer-events-none">
+        <button onClick={onBack} className="pointer-events-auto p-2 rounded-full bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-xl md:text-2xl font-light tracking-tight text-zinc-900 dark:text-zinc-100 pointer-events-auto">{board.title}</h2>
+      </div>
+    </div>
+  );
+}
+
+// --- CanvasBoard: Reusable Interactive Board ---
+
+interface CanvasBoardProps {
+  items: BoardItem[];
+  onCreate: (item: BoardItem) => void;
+  onUpdate: (item: BoardItem) => void;
+  onDelete: (id: string) => void;
+  readOnly?: boolean;
+  title?: string;
+}
+
+function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBoardProps) {
+  const [activeTool, setActiveTool] = useState<"cursor" | "note" | "text" | "line" | "circle" | "pencil" | "arrow">("cursor");
+  const [selectedColor, setSelectedColor] = useState<ColorTheme>("zinc");
   const [canvasState, setCanvasState] = useState({ pan: { x: 0, y: 0 }, zoom: 1 });
-  
+
   // Interaction States
   const [isDrawing, setIsDrawing] = useState(false);
   const [previewShape, setPreviewShape] = useState<ShapeItem | null>(null);
-  const [draggingItem, setDraggingItem] = useState<{ id: string, startX: number, startY: number, itemStartX: number, itemStartY: number } | null>(null);
+  const [previewPencil, setPreviewPencil] = useState<PencilItem | null>(null);
+
+  // Temp item state for smooth dragging without constant parent updates
+  const [dragState, setDragState] = useState<{ id: string, startX: number, startY: number, initialItem: BoardItem } | null>(null);
+  const [tempItem, setTempItem] = useState<BoardItem | null>(null);
+
+  // Helper for getting hex from theme key
+  const getThemeHex = (themeKey?: string) => {
+    if (!themeKey) return "#71717a";
+    return (COLOR_THEMES as any)[themeKey]?.preview || themeKey;
+  };
 
   // Helper to convert screen coords to world coords
   const toWorld = (screenX: number, screenY: number, rect: DOMRect) => {
@@ -398,6 +654,7 @@ function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, 
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as Element).closest('button') || (e.target as Element).closest('input') || (e.target as Element).closest('textarea')) return;
+    if (readOnly) return; // No interaction in read-only mode
 
     const container = e.currentTarget as HTMLDivElement;
     const rect = container.getBoundingClientRect();
@@ -406,26 +663,27 @@ function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, 
     const worldPos = toWorld(clientX, clientY, rect);
 
     if (activeTool === "cursor") {
-       // Check for data-id on target or any of its ancestors
-       const targetElement = (e.target as HTMLElement).closest('[data-id]') as HTMLElement;
-       const targetId = targetElement?.dataset.id;
-       
-       if (targetId) {
-           const item = board.items.find(i => i.id === targetId);
-           if (item && !isNote(item)) { 
-               setDraggingItem({
-                   id: item.id,
-                   startX: clientX,
-                   startY: clientY,
-                   itemStartX: item.x,
-                   itemStartY: item.y
-               });
-               e.stopPropagation(); 
-               return;
-           }
-       }
+      // Check for data-id on target or any of its ancestors
+      const targetElement = (e.target as HTMLElement).closest('[data-id]') as HTMLElement;
+      const targetId = targetElement?.dataset.id;
+
+      if (targetId) {
+        const item = items.find(i => i.id === targetId);
+        if (item && !isNote(item)) {
+          setDragState({
+            id: item.id,
+            startX: clientX,
+            startY: clientY,
+            initialItem: item
+          });
+          setTempItem(item);
+          e.stopPropagation();
+          return;
+        }
+      }
     }
 
+    // Tool Logic
     if (activeTool === "note") {
       const newItem: NoteItem = {
         id: crypto.randomUUID(),
@@ -434,309 +692,375 @@ function PersonalBoardView({ board, onUpdate, onBack }: { board: PersonalBoard, 
         content: "Double click to edit...",
         x: worldPos.x - 100,
         y: worldPos.y - 50,
+        customColor: selectedColor !== "zinc" ? selectedColor : undefined,
       };
-      onUpdate([...board.items, newItem]);
+      onCreate(newItem);
       setActiveTool("cursor");
       e.stopPropagation();
     } else if (activeTool === "text") {
-       const newItem: TextItem = {
+      const newItem: TextItem = {
         id: crypto.randomUUID(),
         type: "text",
         content: "Type here...",
         x: worldPos.x,
         y: worldPos.y - 12,
+        color: selectedColor,
       };
-      onUpdate([...board.items, newItem]);
+      onCreate(newItem);
       setActiveTool("cursor");
       e.stopPropagation();
-    } else if (activeTool === "line" || activeTool === "circle") {
+    } else if (activeTool === "pencil") {
+      setIsDrawing(true);
+      setPreviewPencil({
+        id: "preview-pencil",
+        type: "pencil",
+        x: 0, y: 0, // Not used for pencil rendering logic specifically but needed for BaseItem
+        points: [{ x: worldPos.x, y: worldPos.y }],
+        color: selectedColor
+      });
+      e.stopPropagation();
+    } else if (["line", "circle", "arrow"].includes(activeTool)) {
       setIsDrawing(true);
       setPreviewShape({
         id: "preview",
-        type: activeTool,
+        type: activeTool as ShapeItem["type"],
         x: worldPos.x,
         y: worldPos.y,
         endX: worldPos.x,
         endY: worldPos.y,
-        color: "#71717a"
+        color: selectedColor
       });
-      e.stopPropagation(); 
+      e.stopPropagation();
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (readOnly) return;
     const container = e.currentTarget as HTMLDivElement;
     const rect = container.getBoundingClientRect();
     const clientX = e.clientX;
     const clientY = e.clientY;
     const worldPos = toWorld(clientX, clientY, rect);
 
-    if (draggingItem) {
-        const deltaX = (clientX - draggingItem.startX) / canvasState.zoom;
-        const deltaY = (clientY - draggingItem.startY) / canvasState.zoom;
-        
-        onUpdate(board.items.map(item => {
-            if (item.id === draggingItem.id) {
-                if (isShape(item)) {
-                     const diffX = item.endX - item.x;
-                     const diffY = item.endY - item.y;
-                     const newX = draggingItem.itemStartX + deltaX;
-                     const newY = draggingItem.itemStartY + deltaY;
-                     return { ...item, x: newX, y: newY, endX: newX + diffX, endY: newY + diffY };
-                }
-                return { ...item, x: draggingItem.itemStartX + deltaX, y: draggingItem.itemStartY + deltaY };
-            }
-            return item;
-        }));
-        e.stopPropagation();
-        return;
+    if (dragState && tempItem) {
+      const deltaX = (clientX - dragState.startX) / canvasState.zoom;
+      const deltaY = (clientY - dragState.startY) / canvasState.zoom;
+
+      const item = dragState.initialItem;
+      let newItem = { ...item };
+
+      if (isShape(newItem)) {
+        const diffX = newItem.endX - newItem.x;
+        const diffY = newItem.endY - newItem.y;
+        const newX = item.x + deltaX;
+        const newY = item.y + deltaY;
+        newItem = { ...newItem, x: newX, y: newY, endX: newX + diffX, endY: newY + diffY };
+      } else if (isPencil(newItem) && isPencil(item)) {
+        // Pencil logic: shift all points
+        const dx = deltaX;
+        const dy = deltaY;
+        newItem = {
+          ...newItem,
+          x: item.x + dx, // Metadata x/y
+          y: item.y + dy,
+          points: item.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
+        }
+      } else {
+        // Text/Note
+        newItem = { ...newItem, x: item.x + deltaX, y: item.y + deltaY };
+      }
+
+      setTempItem(newItem);
+      e.stopPropagation();
+      return;
     }
 
-    if (isDrawing && previewShape) {
-      setPreviewShape({
-        ...previewShape,
-        endX: worldPos.x,
-        endY: worldPos.y
-      });
+    if (isDrawing) {
+      if (previewShape) {
+        setPreviewShape({
+          ...previewShape,
+          endX: worldPos.x,
+          endY: worldPos.y
+        });
+      }
+      if (previewPencil) {
+        setPreviewPencil({
+          ...previewPencil,
+          points: [...previewPencil.points, { x: worldPos.x, y: worldPos.y }]
+        });
+      }
       e.stopPropagation();
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (draggingItem) {
-        setDraggingItem(null);
+    if (readOnly) return;
+    if (dragState && tempItem) {
+      onUpdate(tempItem);
+      setDragState(null);
+      setTempItem(null);
     }
-    if (isDrawing && previewShape) {
-      const newItem: ShapeItem = {
-        ...previewShape,
-        id: crypto.randomUUID(),
-      };
-      onUpdate([...board.items, newItem]);
-      setPreviewShape(null);
+    if (isDrawing) {
+      if (previewShape) {
+        const newItem: ShapeItem = {
+          ...previewShape,
+          id: crypto.randomUUID(),
+        };
+        onCreate(newItem);
+        setPreviewShape(null);
+      }
+      if (previewPencil) {
+        const newItem: PencilItem = {
+          ...previewPencil,
+          id: crypto.randomUUID(),
+          // Normalize position? For now just keep points absolute.
+          x: previewPencil.points[0].x,
+          y: previewPencil.points[0].y
+        };
+        onCreate(newItem);
+        setPreviewPencil(null);
+      }
       setIsDrawing(false);
     }
   };
 
+  // Handlers for Cards/Text
   const handleNoteUpdate = (id: string, updates: Partial<NoteItem>) => {
-      onUpdate(board.items.map(item => {
-        if (item.id === id && isNote(item)) {
-          return { ...item, ...updates };
-        }
-        return item;
-      }));
+    const item = items.find(i => i.id === id);
+    if (item && isNote(item)) {
+      onUpdate({ ...item, ...updates });
+    }
   };
-  
   const handleNoteDelete = (id: string) => {
-      onUpdate(board.items.filter(item => item.id !== id));
+    onDelete(id);
+  };
+  const handleTextUpdate = (id: string, newContent: string) => {
+    const item = items.find(i => i.id === id);
+    if (item && isText(item)) {
+      onUpdate({ ...item, content: newContent });
+    }
   };
 
-  const handleTextUpdate = (id: string, newContent: string) => {
-      onUpdate(board.items.map(item => {
-        if (item.id === id && isText(item)) {
-          return { ...item, content: newContent };
-        }
-        return item;
-      }));
-  };
+  // Render list: merge items with tempItem
+  const renderItems = items.map(item => tempItem && tempItem.id === item.id ? tempItem : item);
 
   return (
     <div className="w-full h-full relative">
-       <InfiniteCanvas 
-         className={cn(activeTool !== "cursor" && "cursor-crosshair")}
-         onPanZoom={handlePanZoom}
-       >
-         {/* Interaction Layer */}
-         <div 
-            className="absolute inset-0 w-full h-full z-10"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-         >
-            {/* Shapes */}
-            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
-                {board.items.filter(isShape).map(shape => (
-                <g key={shape.id} className="pointer-events-auto cursor-move">
-                    <g 
-                        data-id={shape.id}
-                        onMouseDown={(e) => {
-                             // Bubble up to parent
-                        }}
-                    >
-                         {shape.type === "line" && (
-                            <line 
-                                x1={shape.x} y1={shape.y} x2={shape.endX} y2={shape.endY} 
-                                stroke={shape.color || "#71717a"} strokeWidth="3" strokeLinecap="round"
-                                className="hover:stroke-blue-500 transition-colors"
-                                data-id={shape.id}
-                            />
-                        )}
-                        {shape.type === "circle" && (
-                            <circle 
-                                cx={shape.x + (shape.endX - shape.x)/2} 
-                                cy={shape.y + (shape.endY - shape.y)/2} 
-                                r={Math.sqrt(Math.pow(shape.endX - shape.x, 2) + Math.pow(shape.endY - shape.y, 2)) / 2} 
-                                stroke={shape.color || "#71717a"} strokeWidth="3" fill="transparent"
-                                className="hover:stroke-blue-500 transition-colors"
-                                data-id={shape.id}
-                            />
-                        )}
-                    </g>
-                </g>
-                ))}
-                {previewShape && (
-                   <g opacity="0.5">
-                     {previewShape.type === "line" && (
-                        <line 
-                            x1={previewShape.x} y1={previewShape.y} x2={previewShape.endX} y2={previewShape.endY} 
-                            stroke={previewShape.color} strokeWidth="3" strokeLinecap="round"
-                        />
-                    )}
-                    {previewShape.type === "circle" && (
-                        <circle 
-                            cx={previewShape.x + (previewShape.endX - previewShape.x)/2} 
-                            cy={previewShape.y + (previewShape.endY - previewShape.y)/2} 
-                            r={Math.sqrt(Math.pow(previewShape.endX - previewShape.x, 2) + Math.pow(previewShape.endY - previewShape.y, 2)) / 2} 
-                            stroke={previewShape.color} strokeWidth="3" fill="transparent"
-                        />
-                    )}
-                   </g>
-                )}
-            </svg>
-
-            {/* Text & Notes */}
-            {board.items.map((item) => {
-                if (isNote(item)) {
-                return (
-                    <div 
-                        key={item.id} 
-                        style={{ position: 'absolute', left: item.x, top: item.y, zIndex: 10 }}
-                        onPointerDown={(e) => e.stopPropagation()} 
-                    >
-                    <Card 
-                        id={item.id}
-                        type={item.type}
-                        title={item.title}
-                        content={item.content}
-                        customColor={item.customColor}
-                        isEditable={true}
-                        onUpdate={handleNoteUpdate}
-                        onDelete={handleNoteDelete}
+      <InfiniteCanvas
+        className={cn(activeTool !== "cursor" && !readOnly && "cursor-crosshair")}
+        onPanZoom={handlePanZoom}
+      >
+        {/* Interaction Layer */}
+        <div
+          className="absolute inset-0 w-full h-full z-10"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        >
+          {/* SVG Layer: Shapes, Lines, Pencil */}
+          <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+            {renderItems.filter(i => isShape(i) || isPencil(i)).map(item => (
+              <g key={item.id} className={cn("pointer-events-auto", !readOnly && "cursor-move")}>
+                <g
+                  data-id={item.id}
+                  onMouseDown={(e) => {
+                    // Let it bubble to Interaction Layer
+                  }}
+                >
+                  {isShape(item) && item.type === "line" && (
+                    <line
+                      x1={item.x} y1={item.y} x2={item.endX} y2={item.endY}
+                      stroke={getThemeHex(item.color)} strokeWidth="3" strokeLinecap="round"
+                      className={cn(!readOnly && "hover:stroke-blue-500 transition-colors")}
+                      data-id={item.id}
                     />
-                    </div>
-                );
-                }
-                if (isText(item)) {
-                return (
-                    <div 
-                        key={item.id}
-                        className="absolute z-20 cursor-move"
-                        style={{ left: item.x, top: item.y }}
+                  )}
+                  {isShape(item) && item.type === "arrow" && (
+                    <>
+                      <defs>
+                        <marker id={`arrowhead-${item.id}`} markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                          <polygon points="0 0, 10 3.5, 0 7" fill={getThemeHex(item.color)} />
+                        </marker>
+                      </defs>
+                      <line
+                        x1={item.x} y1={item.y} x2={item.endX} y2={item.endY}
+                        stroke={getThemeHex(item.color)} strokeWidth="3" strokeLinecap="round"
+                        markerEnd={`url(#arrowhead-${item.id})`}
+                        className={cn(!readOnly && "hover:stroke-blue-500 transition-colors")}
                         data-id={item.id}
-                    >
-                        <div className="group relative">
-                             <input 
-                                className="bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-100 font-medium text-lg min-w-[200px]"
-                                value={item.content}
-                                onChange={(e) => handleTextUpdate(item.id, e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Escape") {
-                                      (e.target as HTMLInputElement).blur();
-                                    }
-                                  }}
-                                onPointerDown={(e) => {
-                                    // Allow text selection if not dragging handle
-                                    e.stopPropagation();
-                                }}
-                                placeholder="Type here..."
-                            />
-                            {/* Drag Handle for Text */}
-                            <div 
-                                className="absolute -left-4 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 cursor-grab text-zinc-400"
-                                onPointerDown={(e) => {
-                                    // This event bubbles to parent with data-id
-                                    // Wait, if we stop propagation here, the parent won't see it?
-                                    // The parent PersonalBoardView handles dragging via draggingItem state.
-                                    // The PARENT is listening on the Interaction Layer.
-                                    // So for Text, we DO want it to bubble to handlePointerDown!
-                                    // But we DON'T want it to bubble to InfiniteCanvas.
-                                    // The InfiniteCanvas is the grandparent.
-                                    // PersonalBoardView.handlePointerDown is attached to the "Interaction Layer" div.
-                                    // Note wrapper is INSIDE Interaction Layer.
-                                    // InfiniteCanvas WRAPS Interaction Layer.
-                                }}
-                                data-id={item.id}
-                            >
-                                <Move className="w-3 h-3" />
-                            </div>
-                        </div>
-                    </div>
-                );
-                }
-                return null;
-            })}
-         </div>
-       </InfiniteCanvas>
+                      />
+                    </>
+                  )}
+                  {isShape(item) && item.type === "circle" && (
+                    <circle
+                      cx={item.x + (item.endX - item.x) / 2}
+                      cy={item.y + (item.endY - item.y) / 2}
+                      r={Math.sqrt(Math.pow(item.endX - item.x, 2) + Math.pow(item.endY - item.y, 2)) / 2}
+                      stroke={getThemeHex(item.color)} strokeWidth="3" fill="transparent"
+                      className={cn(!readOnly && "hover:stroke-blue-500 transition-colors")}
+                      data-id={item.id}
+                    />
+                  )}
+                  {isPencil(item) && (
+                    <polyline
+                      points={item.points.map(p => `${p.x},${p.y}`).join(" ")}
+                      stroke={getThemeHex(item.color)} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"
+                      className={cn(!readOnly && "hover:stroke-blue-500 transition-colors opacity-80")}
+                      data-id={item.id}
+                    />
+                  )}
+                </g>
+              </g>
+            ))}
 
-      <div className="absolute top-4 left-4 md:top-12 md:left-12 z-30 flex items-center gap-4 pointer-events-none">
-        <button onClick={onBack} className="pointer-events-auto p-2 rounded-full bg-white/50 dark:bg-zinc-800/50 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h2 className="text-xl md:text-2xl font-light tracking-tight text-zinc-900 dark:text-zinc-100 pointer-events-auto">{board.title}</h2>
-      </div>
+            {/* Previews */}
+            {(isDrawing && previewShape) && (
+              <g opacity="0.5">
+                {previewShape.type === "line" && (
+                  <line
+                    x1={previewShape.x} y1={previewShape.y} x2={previewShape.endX} y2={previewShape.endY}
+                    stroke={getThemeHex(previewShape.color || selectedColor)} strokeWidth="3" strokeLinecap="round"
+                  />
+                )}
+                {previewShape.type === "arrow" && (
+                  <line
+                    x1={previewShape.x} y1={previewShape.y} x2={previewShape.endX} y2={previewShape.endY}
+                    stroke={getThemeHex(previewShape.color || selectedColor)} strokeWidth="3" strokeLinecap="round"
+                  />
+                )}
+                {previewShape.type === "circle" && (
+                  <circle
+                    cx={previewShape.x + (previewShape.endX - previewShape.x) / 2}
+                    cy={previewShape.y + (previewShape.endY - previewShape.y) / 2}
+                    r={Math.sqrt(Math.pow(previewShape.endX - previewShape.x, 2) + Math.pow(previewShape.endY - previewShape.y, 2)) / 2}
+                    stroke={getThemeHex(previewShape.color || selectedColor)} strokeWidth="3" fill="transparent"
+                  />
+                )}
+              </g>
+            )}
+            {(isDrawing && previewPencil) && (
+              <polyline
+                points={previewPencil.points.map(p => `${p.x},${p.y}`).join(" ")}
+                stroke={getThemeHex(previewPencil.color || selectedColor)} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"
+                opacity="0.5"
+              />
+            )}
+          </svg>
 
-      <div className="absolute bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 p-2 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl pointer-events-auto">
-        <button
-          onClick={() => setActiveTool("cursor")}
-          className={cn(
-            "p-3 rounded-xl transition-colors",
-            activeTool === "cursor" ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          )}
-          title="Select / Move"
-        >
-          <MousePointer2 className="w-5 h-5" />
-        </button>
-        <div className="w-px h-8 bg-zinc-200 dark:bg-zinc-800 mx-1" />
-        <button
-          onClick={() => setActiveTool("note")}
-          className={cn(
-            "p-3 rounded-xl transition-colors",
-            activeTool === "note" ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          )}
-          title="Sticky Note"
-        >
-          <StickyNote className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setActiveTool("text")}
-          className={cn(
-            "p-3 rounded-xl transition-colors",
-            activeTool === "text" ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          )}
-          title="Text"
-        >
-          <Type className="w-5 h-5" />
-        </button>
-         <button
-          onClick={() => setActiveTool("line")}
-          className={cn(
-            "p-3 rounded-xl transition-colors",
-            activeTool === "line" ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          )}
-          title="Line"
-        >
-          <Minus className="w-5 h-5 -rotate-45" />
-        </button>
-         <button
-          onClick={() => setActiveTool("circle")}
-          className={cn(
-            "p-3 rounded-xl transition-colors",
-            activeTool === "circle" ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          )}
-          title="Circle"
-        >
-          <CircleIcon className="w-5 h-5" />
-        </button>
-      </div>
+          {/* DOM Layer: Text & Notes */}
+          {renderItems.map((item) => {
+            if (isNote(item)) {
+              return (
+                <div
+                  key={item.id}
+                  style={{ position: 'absolute', left: item.x, top: item.y, zIndex: 10 }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <Card
+                    id={item.id}
+                    type={item.type}
+                    title={item.title}
+                    content={item.content}
+                    customColor={item.customColor}
+                    isEditable={!readOnly}
+                    onUpdate={!readOnly ? handleNoteUpdate : undefined}
+                    onDelete={!readOnly ? handleNoteDelete : undefined}
+                  />
+                </div>
+              );
+            }
+            if (isText(item)) {
+              return (
+                <div
+                  key={item.id}
+                  className={cn("absolute z-20", !readOnly && "cursor-move")}
+                  style={{ left: item.x, top: item.y }}
+                  data-id={item.id}
+                >
+                  <div className="group relative">
+                    <input
+                      className="bg-transparent border-none outline-none font-medium text-lg min-w-[200px]"
+                      style={{ color: getThemeHex(item.color) }}
+                      value={item.content}
+                      readOnly={readOnly}
+                      onChange={(e) => !readOnly && handleTextUpdate(item.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                    />
+                    {/* Drag Handle for Text */}
+                    {!readOnly && (
+                      <div
+                        className="absolute -left-4 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 cursor-grab text-zinc-400"
+                        data-id={item.id}
+                      >
+                        <Move className="w-3 h-3" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })}
+        </div>
+      </InfiniteCanvas>
+
+      {/* Tool Palette - Only visible if not readOnly */}
+      {!readOnly && (
+        <div className="absolute bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-8">
+          {/* Color Picker */}
+          <div className="flex items-center gap-2 p-2 rounded-full bg-white/90 dark:bg-zinc-900/90 backdrop-blur border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            {(Object.keys(COLOR_THEMES) as ColorTheme[]).map(themeKey => (
+              <button
+                key={themeKey}
+                onClick={() => setSelectedColor(themeKey)}
+                className={cn(
+                  "w-5 h-5 rounded-full border border-black/10 dark:border-white/10 transition-transform hover:scale-110",
+                  selectedColor === themeKey && "ring-2 ring-zinc-900 dark:ring-zinc-100 ring-offset-2 dark:ring-offset-zinc-950 scale-110"
+                )}
+                style={{ backgroundColor: COLOR_THEMES[themeKey].preview }}
+                title={COLOR_THEMES[themeKey].label}
+              />
+            ))}
+          </div>
+
+          {/* Tools */}
+          <div className="flex items-center gap-2 p-2 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl">
+            {[
+              { id: "cursor", icon: MousePointer2, label: "Select" },
+              { id: "note", icon: StickyNote, label: "Note" },
+              { id: "text", icon: Type, label: "Text" },
+              { id: "pencil", icon: Pencil, label: "Draw" },
+              { id: "line", icon: Minus, label: "Line", style: { transform: "rotate(-45deg)" } },
+              { id: "arrow", icon: ArrowRight, label: "Arrow", style: { transform: "rotate(-45deg)" } },
+              { id: "circle", icon: CircleIcon, label: "Circle" },
+            ].map(tool => (
+              <button
+                key={tool.id}
+                onClick={() => setActiveTool(tool.id as any)}
+                className={cn(
+                  "p-3 rounded-xl transition-colors relative group/tooltip",
+                  activeTool === tool.id
+                    ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                    : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                )}
+              >
+                <tool.icon className="w-5 h-5" style={tool.style} />
+                {/* Tooltip */}
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-zinc-900 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-900 text-xs rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                  {tool.label}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

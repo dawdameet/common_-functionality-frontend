@@ -2,14 +2,15 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  PenTool, 
-  CheckSquare, 
-  MessageSquare, 
+import {
+  LayoutDashboard,
+  PenTool,
+  CheckSquare,
+  MessageSquare,
   Sparkles,
   UserCircle,
-  Calendar
+  Calendar,
+  Users
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -20,7 +21,8 @@ const navItems = [
   { id: "calendar", label: "Calendar", icon: Calendar },
   { id: "tasks", label: "Tasks", icon: CheckSquare },
   { id: "comm", label: "Communication", icon: MessageSquare },
-  { id: "ai", label: "AI Layer", icon: Sparkles },
+  // { id: "ai", label: "AI Layer", icon: Sparkles }, // V1 Scope Change
+  { id: "team", label: "Team", icon: Users },
 ];
 
 interface SidebarProps {
@@ -36,25 +38,25 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           <div className="w-4 h-4 bg-zinc-100 dark:bg-zinc-950 rounded-sm rotate-45" />
         </div>
       </div>
-      
+
       <div className="flex flex-row md:flex-col gap-1 md:gap-4 flex-1 justify-around md:justify-start w-full md:w-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
-          
+
           return (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={cn(
                 "relative p-2 md:p-3 rounded-xl transition-all duration-300 group",
-                isActive 
-                  ? "text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800/50" 
+                isActive
+                  ? "text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800/50"
                   : "text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
               )}
             >
               <Icon className="w-5 h-5 md:w-6 md:h-6" />
-              
+
               {isActive && (
                 <motion.div
                   layoutId="sidebar-active"
@@ -62,7 +64,7 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 />
               )}
-              
+
               <div className="hidden md:block absolute left-full ml-4 px-2 py-1 rounded bg-zinc-800 text-zinc-200 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
                 {item.label}
               </div>
@@ -70,18 +72,18 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           );
         })}
       </div>
-      
+
       <div className="hidden md:flex flex-col gap-4 items-center mb-4">
         <ThemeToggle />
-        <button 
+        <button
           onClick={() => setActiveTab("profile")}
           className={cn(
             "w-8 h-8 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700 flex items-center justify-center transition-all hover:scale-105",
             activeTab === "profile" ? "ring-2 ring-zinc-900 dark:ring-zinc-100 ring-offset-2" : ""
           )}
         >
-           {/* Placeholder for user avatar */}
-           <UserCircle className="w-full h-full text-zinc-400" />
+          {/* Placeholder for user avatar */}
+          <UserCircle className="w-full h-full text-zinc-400" />
         </button>
       </div>
     </div>

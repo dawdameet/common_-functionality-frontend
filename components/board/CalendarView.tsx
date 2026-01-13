@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddEventModal } from "./AddEventModal";
+import { useUser } from "../auth/UserContext";
+import { createClient } from "@/utils/supabase/client";
+import { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 export interface CalendarEvent {
   id: string;
@@ -11,31 +14,55 @@ export interface CalendarEvent {
   date: string; // YYYY-MM-DD
   time?: string;
   type: "meeting" | "deadline" | "reminder";
+  isGlobal?: boolean;
+  authorId?: string;
 }
 
-const initialEvents: CalendarEvent[] = [
-  {
-    id: "1",
-    title: "Project Kickoff",
-    date: new Date().toISOString().split("T")[0],
-    time: "10:00 AM",
-    type: "meeting",
-  },
-  {
-    id: "2",
-    title: "Design Review",
-    date: new Date(Date.now() + 86400000).toISOString().split("T")[0], // Tomorrow
-    time: "2:00 PM",
-    type: "meeting",
-  },
-];
+// initialEvents array is removed as events will be fetched from Supabase
 
 export function CalendarView() {
+  const { currentUser } = useUser();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
+  const [events, setEvents] = useState<CalendarEvent[]>([]); // Initialize with empty array
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(undefined);
+  const supabase = createClient(); // Initialize Supabase client
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const { data, error } = await supabase.from('calendar_events').select('*');
+      if (error) {
+        console.error("Error fetching events:", error);
+        return;
+      }
+      if (data) {
+        setEvents(data.map(e => ({
+          id: e.id,
+          title: e.title,
+          type: e.type as any, // Type assertion for 'type'
+          date: new Date(e.start_time).toISOString().split('T')[0],
+          time: e.start_time.includes('T') ? new Date(e.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined, // Map time if present
+          isGlobal: e.is_global,
+          authorId: e.owner_id
+        })));
+      }
+    };
+    fetchEvents();
+
+    // Set up Realtime listener
+    const channel = supabase.channel('calendar_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, (payload: RealtimePostgresChangesPayload<any>) => {
+        // Re-fetch for simplicity on any change
+        fetchEvents();
+      })
+      .subscribe();
+
+    // Cleanup function for the effect
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]); // Dependency array includes supabase to ensure effect re-runs if client changes (though it's usually static)
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -60,7 +87,12 @@ export function CalendarView() {
 
   const getEventsForDay = (day: number) => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return events.filter(e => e.date === dateStr);
+    return events.filter(e => {
+      const isDateMatch = e.date === dateStr;
+      // Ensure currentUser is not null before accessing its properties
+      const isVisible = e.isGlobal || (currentUser && e.authorId === currentUser.id);
+      return isDateMatch && isVisible;
+    });
   };
 
   const handleAddEvent = (dateStr?: string) => {
@@ -75,17 +107,45 @@ export function CalendarView() {
     setIsModalOpen(true);
   };
 
-  const handleSaveEvent = (eventData: Omit<CalendarEvent, "id">) => {
+  const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id">) => {
+    const startTime = new Date(`${eventData.date}T${eventData.time || '09:00'}:00`).toISOString();
+    const endTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // Default +1 hour
+
     if (selectedEvent) {
-      setEvents(events.map(e => e.id === selectedEvent.id ? { ...eventData, id: selectedEvent.id } : e));
+      // Update existing event
+      const { error } = await supabase.from('calendar_events').update({
+        title: eventData.title,
+        start_time: startTime,
+        end_time: endTime,
+        type: eventData.type,
+        is_global: eventData.isGlobal,
+        owner_id: currentUser?.id // Use optional chaining for currentUser
+      }).eq('id', selectedEvent.id);
+
+      if (error) {
+        alert("Failed to update event: " + error.message);
+      } else {
+        setIsModalOpen(false);
+        // Realtime listener will handle re-fetching
+      }
     } else {
-      const newEvent: CalendarEvent = {
-        ...eventData,
-        id: Math.random().toString(36).substr(2, 9),
-      };
-      setEvents([...events, newEvent]);
+      // Add new event
+      const { error } = await supabase.from('calendar_events').insert({
+        title: eventData.title,
+        start_time: startTime,
+        end_time: endTime,
+        type: eventData.type,
+        is_global: eventData.isGlobal,
+        owner_id: currentUser?.id // Use optional chaining for currentUser
+      });
+
+      if (error) {
+        alert("Failed to add event: " + error.message);
+      } else {
+        setIsModalOpen(false);
+        // Realtime listener will handle re-fetching
+      }
     }
-    setIsModalOpen(false);
   };
 
   return (
@@ -198,9 +258,13 @@ export function CalendarView() {
                         }}
                         className={cn(
                           "text-xs px-2 py-1 rounded truncate font-medium border transition-all hover:scale-[1.02] cursor-pointer",
+                          // Base colors by type
                           event.type === "meeting" && "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
                           event.type === "deadline" && "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50",
-                          event.type === "reminder" && "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50"
+                          event.type === "reminder" && "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
+
+                          // Style differentiation for Global vs Personal
+                          event.isGlobal ? "font-bold shadow-sm" : "opacity-80 border-dashed"
                         )}
                       >
                         {event.title}
@@ -219,6 +283,7 @@ export function CalendarView() {
         onSave={handleSaveEvent}
         initialDate={selectedDate}
         initialEvent={selectedEvent}
+        currentUser={currentUser}
       />
     </div>
   );

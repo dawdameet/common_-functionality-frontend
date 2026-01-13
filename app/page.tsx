@@ -4,9 +4,19 @@ import { useState } from "react";
 import { Sidebar } from "@/components/navigation/Sidebar";
 
 import { BoardCanvas } from "@/components/board/BoardCanvas";
+import { UserProvider, useUser } from "@/components/auth/UserContext";
 
 export default function Home() {
+  return (
+    <UserProvider>
+      <AppShell />
+    </UserProvider>
+  );
+}
+
+function AppShell() {
   const [activeTab, setActiveTab] = useState("board");
+  const { currentUser } = useUser();
 
   return (
     <div className="flex min-h-screen bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-sans selection:bg-zinc-900 selection:text-zinc-100 dark:selection:bg-zinc-100 dark:selection:text-zinc-900 transition-colors duration-300">
@@ -20,7 +30,7 @@ export default function Home() {
           {activeTab === "calendar" && <CalendarSurface />}
           {activeTab === "tasks" && <TasksSurface />}
           {activeTab === "comm" && <CommSurface />}
-          {activeTab === "ai" && <AISurface />}
+          {activeTab === "team" && <TeamSurface />}
           {activeTab === "profile" && <ProfileSurface />}
         </div>
       </main>
@@ -103,22 +113,10 @@ function CommSurface() {
   );
 }
 
-import { AILayer } from "@/components/ai/AILayer";
+import { TeamSurface } from "@/components/team/TeamSurface";
 import { UserProfile } from "@/components/profile/UserProfile";
 
-function AISurface() {
-  return (
-    <div className="p-4 md:p-12 pb-4 md:pb-12 h-full flex flex-col">
-      <header className="mb-6 md:mb-12">
-        <h1 className="text-zinc-900 dark:text-zinc-100 text-2xl md:text-3xl font-light tracking-tight">AI Layer</h1>
-        <p className="text-zinc-500 mt-1 md:mt-2 text-sm md:text-base">Silent operator observing and connecting.</p>
-      </header>
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <AILayer />
-      </div>
-    </div>
-  );
-}
+// AI Surface removed for V1
 
 function ProfileSurface() {
   return (

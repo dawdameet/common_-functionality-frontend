@@ -9,13 +9,15 @@ interface AddEventModalProps {
     onSave: (event: Omit<CalendarEvent, "id">) => void;
     initialDate?: string;
     initialEvent?: CalendarEvent;
+    currentUser?: { role: "moderator" | "general" }; // Mock type or import
 }
 
-export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEvent }: AddEventModalProps) {
+export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEvent, currentUser }: AddEventModalProps) {
     const [title, setTitle] = useState("");
     const [date, setDate] = useState("");
     const [time, setTime] = useState("");
     const [type, setType] = useState<CalendarEvent["type"]>("meeting");
+    const [isGlobal, setIsGlobal] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -40,6 +42,7 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEve
                 }
                 setTime(timeVal);
                 setType(initialEvent.type);
+                setIsGlobal(initialEvent.isGlobal || false);
             } else {
                 if (initialDate) {
                     setDate(initialDate);
@@ -50,6 +53,7 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEve
                 setTitle("");
                 setTime("09:00");
                 setType("meeting");
+                setIsGlobal(false);
             }
         }
     }, [isOpen, initialDate, initialEvent]);
@@ -68,20 +72,12 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEve
         // but for now keeping it simple is likely fine. 
         // Actually, let's try to match the style.
 
-        let formattedTime = time;
-        if (time) {
-            const [hours, minutes] = time.split(':');
-            const h = parseInt(hours, 10);
-            const ampm = h >= 12 ? 'PM' : 'AM';
-            const h12 = h % 12 || 12;
-            formattedTime = `${h12}:${minutes} ${ampm}`;
-        }
-
         onSave({
             title,
             date,
-            time: formattedTime,
+            time, // Pass raw 24h time (HH:MM)
             type,
+            isGlobal,
         });
         onClose();
     };
@@ -178,6 +174,22 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEve
                             ))}
                         </div>
                     </div>
+
+                    {/* Global Event Toggle (Moderator Only) */}
+                    {currentUser?.role === "moderator" && (
+                        <div className="flex items-center gap-2 pt-2">
+                            <input
+                                id="isGlobal"
+                                type="checkbox"
+                                checked={isGlobal}
+                                onChange={(e) => setIsGlobal(e.target.checked)}
+                                className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-blue-600 focus:ring-blue-500/20 focus:ring-offset-0"
+                            />
+                            <label htmlFor="isGlobal" className="text-sm font-medium text-zinc-900 dark:text-zinc-100 select-none cursor-pointer">
+                                Post to Global Calendar
+                            </label>
+                        </div>
+                    )}
 
                     {/* Footer Actions */}
                     <div className="flex items-center justify-end gap-3 mt-4 pt-2">
