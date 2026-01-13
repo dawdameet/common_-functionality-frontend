@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Card, CardType } from "./Card";
-import { GitPullRequest, Sparkles, Plus, Layout, ArrowLeft, Type, StickyNote, Minus, Circle as CircleIcon, MousePointer2, Move, Trash2, Pencil, ArrowRight } from "lucide-react";
+import { GitPullRequest, Sparkles, Plus, Layout, ArrowLeft, Type, StickyNote, Minus, Circle as CircleIcon, MousePointer2, Move, Trash2, Pencil, ArrowRight, Eraser } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useUser } from "../auth/UserContext";
@@ -171,6 +171,78 @@ export function BoardCanvas() {
           onBack={() => setViewMode("personal-list")}
         />
       )}
+    </div>
+  );
+}
+
+
+function BoardTextInput({ item, readOnly, onUpdate, getThemeHex }: {
+  item: TextItem, readOnly?: boolean, onUpdate?: (id: string, val: string) => void, getThemeHex: (key?: string) => string
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [localValue, setLocalValue] = useState(item.content);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync local value with prop when NOT focused (external updates)
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(item.content);
+    }
+  }, [item.content, isFocused]);
+
+  // Auto-resize
+  useEffect(() => {
+    if (textAreaRef.current) {
+      textAreaRef.current.style.height = "auto";
+      textAreaRef.current.style.height = textAreaRef.current.scrollHeight + "px";
+      // Basic width expansion
+      textAreaRef.current.style.width = "auto";
+      textAreaRef.current.style.width = Math.max(200, textAreaRef.current.scrollWidth) + "px";
+    }
+  }, [localValue]);
+
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setLocalValue(val);
+    onUpdate?.(item.id, val);
+  };
+
+  return (
+    <div
+      className={cn("absolute z-20", !readOnly && "cursor-move")}
+      style={{ left: item.x, top: item.y }}
+      data-id={item.id}
+    >
+      <div className="group relative">
+        <textarea
+          ref={textAreaRef}
+          className="bg-transparent border-none outline-none font-medium text-lg overflow-hidden resize-none"
+          style={{ color: getThemeHex(item.color) }}
+          value={localValue}
+          readOnly={readOnly}
+          onChange={handleChange}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          rows={1}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              (e.target as HTMLTextAreaElement).blur();
+            }
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+        />
+        {!readOnly && (
+          <div
+            className="absolute -left-4 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 cursor-grab text-zinc-400"
+            data-id={item.id}
+          >
+            <Move className="w-3 h-3" />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -715,7 +787,7 @@ interface CanvasBoardProps {
 }
 
 function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBoardProps) {
-  const [activeTool, setActiveTool] = useState<"cursor" | "note" | "text" | "line" | "circle" | "pencil" | "arrow">("cursor");
+  const [activeTool, setActiveTool] = useState<"cursor" | "note" | "text" | "line" | "circle" | "pencil" | "arrow" | "eraser">("cursor");
   const [selectedColor, setSelectedColor] = useState<ColorTheme>("zinc");
   const [canvasState, setCanvasState] = useState({ pan: { x: 0, y: 0 }, zoom: 1 });
 
@@ -759,14 +831,21 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
     const clientY = e.clientY;
     const worldPos = toWorld(clientX, clientY, rect);
 
-    if (activeTool === "cursor") {
-      // Check for data-id on target or any of its ancestors
-      const targetElement = (e.target as HTMLElement).closest('[data-id]') as HTMLElement;
-      const targetId = targetElement?.dataset.id;
+    // Check for data-id on target or any of its ancestors
+    const targetElement = (e.target as HTMLElement).closest('[data-id]') as HTMLElement;
+    const targetId = targetElement?.dataset.id;
 
+    // Eraser Logic
+    if (activeTool === "eraser" && targetId) {
+      onDelete(targetId);
+      e.stopPropagation();
+      return;
+    }
+
+    if (activeTool === "cursor") {
       if (targetId) {
         const item = items.find(i => i.id === targetId);
-        if (item && !isNote(item)) {
+        if (item && !isNote(item)) { // Notes are handled by their own Card component
           setDragState({
             id: item.id,
             startX: clientX,
@@ -1068,39 +1147,13 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
             }
             if (isText(item)) {
               return (
-                <div
+                <BoardTextInput
                   key={item.id}
-                  className={cn("absolute z-20", !readOnly && "cursor-move")}
-                  style={{ left: item.x, top: item.y }}
-                  data-id={item.id}
-                >
-                  <div className="group relative">
-                    <input
-                      className="bg-transparent border-none outline-none font-medium text-lg min-w-[200px]"
-                      style={{ color: getThemeHex(item.color) }}
-                      value={item.content}
-                      readOnly={readOnly}
-                      onChange={(e) => !readOnly && handleTextUpdate(item.id, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          (e.target as HTMLInputElement).blur();
-                        }
-                      }}
-                      onPointerDown={(e) => {
-                        e.stopPropagation();
-                      }}
-                    />
-                    {/* Drag Handle for Text */}
-                    {!readOnly && (
-                      <div
-                        className="absolute -left-4 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 cursor-grab text-zinc-400"
-                        data-id={item.id}
-                      >
-                        <Move className="w-3 h-3" />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  item={item}
+                  readOnly={readOnly}
+                  onUpdate={!readOnly ? handleTextUpdate : undefined}
+                  getThemeHex={getThemeHex}
+                />
               );
             }
             return null;
@@ -1137,6 +1190,7 @@ function CanvasBoard({ items, onCreate, onUpdate, onDelete, readOnly }: CanvasBo
               { id: "line", icon: Minus, label: "Line", style: { transform: "rotate(-45deg)" } },
               { id: "arrow", icon: ArrowRight, label: "Arrow", style: { transform: "rotate(-45deg)" } },
               { id: "circle", icon: CircleIcon, label: "Circle" },
+              { id: "eraser", icon: Eraser, label: "Eraser" },
             ].map(tool => (
               <button
                 key={tool.id}
