@@ -7,11 +7,13 @@ import { Shield, Briefcase, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { AssignTaskModal } from "./AssignTaskModal";
+import { UserProfileModal } from "@/components/profile/UserProfileModal";
 
 export function TeamSurface() {
     const { currentUser } = useUser();
     const [teamMembers, setTeamMembers] = useState<User[]>([]);
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null); // For Task Assignment
+    const [viewingUserId, setViewingUserId] = useState<string | null>(null); // For Profile View
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const supabase = createClient();
@@ -70,7 +72,8 @@ export function TeamSurface() {
                 {teamMembers.map((user) => (
                     <div
                         key={user.id}
-                        className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800"
+                        onClick={() => setViewingUserId(user.id)}
+                        className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/80 transition-colors group"
                     >
                         <div className="relative">
                             <img src={user.avatar} alt={user.name} className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800" />
@@ -82,7 +85,7 @@ export function TeamSurface() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{user.name}</h3>
+                            <h3 className="font-medium text-zinc-900 dark:text-zinc-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{user.name}</h3>
                             <p className="text-xs text-zinc-500 capitalize flex items-center gap-1">
                                 {user.role === 'moderator' ? <Shield className="w-3 h-3" /> : <Briefcase className="w-3 h-3" />}
                                 {user.role}
@@ -92,8 +95,8 @@ export function TeamSurface() {
                         {/* Moderator Action: Assign Task */}
                         {currentUser.role === 'moderator' && currentUser.id !== user.id && (
                             <button
-                                onClick={() => handleOpenAssignModal(user)}
-                                className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 transition-colors"
+                                onClick={(e) => { e.stopPropagation(); handleOpenAssignModal(user); }}
+                                className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 transition-colors opacity-0 group-hover:opacity-100"
                                 title="Assign Task"
                             >
                                 <Plus className="w-4 h-4" />
@@ -109,6 +112,13 @@ export function TeamSurface() {
                 onAssign={handleConfirmAssign}
                 assigneeName={selectedUser?.name || "Member"}
             />
+            
+            {viewingUserId && (
+                <UserProfileModal 
+                    userId={viewingUserId} 
+                    onClose={() => setViewingUserId(null)} 
+                />
+            )}
         </div>
     );
 }

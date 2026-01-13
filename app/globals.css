@@ -24,3 +24,39 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Custom Scrollbar - Thin Seeker Style */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 transparent; /* zinc-300 */
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: #3f3f46 transparent; /* zinc-700 */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #d4d4d8; /* zinc-300 */
+  border-radius: 9999px;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #3f3f46; /* zinc-700 */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #a1a1aa; /* zinc-400 */
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #52525b; /* zinc-600 */
+}

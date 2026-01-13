@@ -16,12 +16,12 @@ function AppShell() {
   const { currentUser } = useUser();
 
   return (
-    <div className="flex min-h-screen bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-sans selection:bg-zinc-900 selection:text-zinc-100 dark:selection:bg-zinc-100 dark:selection:text-zinc-900 transition-colors duration-300">
+    <div className="flex h-screen bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-sans selection:bg-zinc-900 selection:text-zinc-100 dark:selection:bg-zinc-100 dark:selection:text-zinc-900 transition-colors duration-300 overflow-hidden">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      <main className="flex-1 ml-0 md:ml-20 pb-20 md:pb-0 min-h-screen relative overflow-hidden">
+      <main className="flex-1 ml-0 md:ml-20 pb-20 md:pb-0 h-screen relative overflow-hidden">
         {/* Surface Container */}
-        <div className="h-full w-full">
+        <div className="h-full w-full overflow-hidden">
           {activeTab === "board" && <BoardSurface />}
           {activeTab === "scribble" && <ScribbleSurface />}
           {activeTab === "calendar" && <CalendarSurface />}
