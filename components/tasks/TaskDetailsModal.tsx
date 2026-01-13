@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Calendar, User, AlignLeft, Flag, X, MapPin } from "lucide-react";
+import { Calendar, User, AlignLeft, Flag, X, MapPin, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Task {
@@ -19,6 +19,7 @@ interface Task {
         role: string;
     };
     deadline?: string;
+    attachment_url?: string;
     origin_board_item_id?: string; // If linked
 }
 
@@ -136,6 +137,20 @@ export function TaskDetailsModal({ task, onClose }: TaskDetailsModalProps) {
                                     </div>
                                 </div>
                             </div>
+
+                            {task.attachment_url && (
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800 flex items-center gap-3 text-sm text-blue-600 dark:text-blue-400 mb-6">
+                                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                                        <ExternalLink className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex flex-col flex-1 min-w-0">
+                                        <span className="text-xs font-semibold uppercase tracking-wider opacity-70">Attachment / Link</span>
+                                        <a href={task.attachment_url} target="_blank" rel="noopener noreferrer" className="font-medium truncate hover:underline">
+                                            {task.attachment_url}
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
 
                             {task.origin_board_item_id && (
                                 <div className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800 flex items-center gap-3 text-sm text-zinc-500">

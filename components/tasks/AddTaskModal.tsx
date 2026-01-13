@@ -22,6 +22,7 @@ export function AddTaskModal({ isOpen, onClose, onSave, currentUser }: AddTaskMo
     const [deadline, setDeadline] = useState("");
     const [assigneeId, setAssigneeId] = useState(currentUser?.id || "");
     const [teamMembers, setTeamMembers] = useState<any[]>([]);
+    const [link, setLink] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const supabase = createClient();
@@ -52,6 +53,7 @@ export function AddTaskModal({ isOpen, onClose, onSave, currentUser }: AddTaskMo
                 priority,
                 deadline,
                 assignee_id: assigneeId,
+                attachment_url: link,
                 status: 'todo'
             });
             onClose();
@@ -60,6 +62,7 @@ export function AddTaskModal({ isOpen, onClose, onSave, currentUser }: AddTaskMo
             setDescription("");
             setPriority("medium");
             setDeadline("");
+            setLink("");
         } catch (error) {
             console.error(error);
         } finally {
@@ -137,6 +140,17 @@ export function AddTaskModal({ isOpen, onClose, onSave, currentUser }: AddTaskMo
                                 min={today}
                                 value={deadline}
                                 onChange={e => setDeadline(e.target.value)}
+                                className="w-full px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            />
+                        </div>
+
+                        {/* Link (Optional) */}
+                        <div className="space-y-1 col-span-2">
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5"><ExternalLink className="w-4 h-4 text-zinc-400" /> Link / Attachment</label>
+                            <input
+                                value={link}
+                                onChange={e => setLink(e.target.value)}
+                                placeholder="https://..."
                                 className="w-full px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 focus:ring-2 focus:ring-blue-500/20 outline-none"
                             />
                         </div>

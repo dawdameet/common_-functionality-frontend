@@ -25,6 +25,7 @@ interface Task {
   };
   creator_id?: string; // To check if self
   deadline?: string;
+  attachment_url?: string;
   origin_board_item_id?: string;
   created_at: string;
 }
@@ -171,6 +172,19 @@ export function TaskBoard() {
                               <Calendar className="w-3 h-3" />
                               <span>{new Date(task.deadline).toLocaleDateString()}</span>
                             </div>
+                          )}
+                          {task.attachment_url && (
+                            <a
+                              href={task.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1.5 text-blue-500 hover:text-blue-600 transition-colors text-[10px]"
+                              title={task.attachment_url}
+                            >
+                              <LinkIcon className="w-3 h-3" />
+                              <span className="underline opacity-0 group-hover:opacity-100 transition-opacity max-w-[100px] truncate">Link</span>
+                            </a>
                           )}
                           {task.origin_board_item_id && (
                             <div className="flex items-center gap-1.5 text-zinc-400 dark:text-zinc-500 text-[10px] ml-auto font-mono opacity-0 group-hover:opacity-100 transition-opacity">
