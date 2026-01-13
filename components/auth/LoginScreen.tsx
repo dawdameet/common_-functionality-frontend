@@ -11,6 +11,7 @@ export function LoginScreen() {
     const [mode, setMode] = useState<"signin" | "signup">("signin");
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
+    const [teamCode, setTeamCode] = useState("");
 
     const supabase = createClient();
 
@@ -22,12 +23,25 @@ export function LoginScreen() {
 
         try {
             if (mode === "signup") {
+                // Validate Team Code first
+                const cleanedCode = teamCode.trim();
+                const { data: teamData, error: teamError } = await supabase
+                    .from('teams')
+                    .select('id')
+                    .eq('code', cleanedCode)
+                    .single();
+
+                if (teamError || !teamData) {
+                    throw new Error("Invalid Team Code. Please contact your administrator.");
+                }
+
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
                         data: {
                             full_name: email.split("@")[0], // Default name from email
+                            team_code: cleanedCode
                         },
                     },
                 });
@@ -87,6 +101,21 @@ export function LoginScreen() {
                                 onChange={(e) => setPassword(e.target.value)}
                             />
                         </div>
+                        {mode === "signup" && (
+                            <div>
+                                <label htmlFor="teamCode" className="sr-only">Team Code</label>
+                                <input
+                                    id="teamCode"
+                                    name="teamCode"
+                                    type="text"
+                                    required
+                                    className="relative block w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 focus:z-10 focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                                    placeholder="Team Code (e.g. AG-2026)"
+                                    value={teamCode}
+                                    onChange={(e) => setTeamCode(e.target.value)}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {error && (

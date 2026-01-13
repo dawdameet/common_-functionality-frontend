@@ -16,6 +16,7 @@ interface BaseItem {
   id: string;
   x: number;
   y: number;
+  status?: 'pending' | 'approved';
 }
 
 interface NoteItem extends BaseItem {
@@ -170,6 +171,60 @@ export function BoardCanvas() {
           onBack={() => setViewMode("personal-list")}
         />
       )}
+    </div>
+  );
+}
+
+function ApprovalQueue({ items, onApprove, onReject }: {
+  items: BoardItem[],
+  onApprove: (id: string, x?: number, y?: number) => void,
+  onReject: (id: string) => void
+}) {
+  return (
+    <div className="absolute top-20 right-4 z-40 flex flex-col gap-2 max-h-[calc(100vh-160px)] overflow-y-auto pr-2 custom-scrollbar">
+      <h3 className="text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Pending Proposals</h3>
+      <div className="flex flex-col gap-3">
+        {items.map(item => (
+          <div key={item.id} className="w-80 p-4 bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-amber-300 dark:border-amber-700/50 shadow-lg relative group">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-[10px] font-mono text-zinc-400 uppercase border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded">
+                {isNote(item) ? item.type : "item"}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => onReject(item.id)}
+                  className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded transition-colors"
+                  title="Reject"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onApprove(item.id, Math.random() * 400 + 100, Math.random() * 300 + 100)}
+                  className="p-1 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-500 rounded transition-colors"
+                  title="Approve"
+                >
+                  <Sparkles className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {(isNote(item) || isText(item)) && (
+              <>
+                <h4 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 mb-1 line-clamp-1">{(item as any).title || "Untitled"}</h4>
+                <p className="text-xs text-zinc-500 line-clamp-3 leading-relaxed">
+                  {(item as any).content || "No content"}
+                </p>
+              </>
+            )}
+            {!isNote(item) && !isText(item) && (
+              <div className="flex items-center justify-center py-4 text-zinc-400 text-xs">
+                <Layout className="w-6 h-6 mb-2 opacity-50" />
+                <span className="block">Drawing / Shape</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -337,6 +392,7 @@ function SharedBoardView() {
           content: row.content,
           x: row.position.x,
           y: row.position.y,
+          status: row.status,
           ...row.meta // Spread color, endX, endY, points
         }));
         setItems(parsedItems);
@@ -356,6 +412,7 @@ function SharedBoardView() {
             content: row.content,
             x: row.position.x,
             y: row.position.y,
+            status: row.status,
             ...row.meta
           };
           setItems(prev => [...prev.filter(i => i.id !== newItem.id), newItem]);
@@ -368,6 +425,7 @@ function SharedBoardView() {
             content: row.content,
             x: row.position.x,
             y: row.position.y,
+            status: row.status,
             ...row.meta
           };
           setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
@@ -418,10 +476,41 @@ function SharedBoardView() {
     await supabase.from('board_items').delete().eq('id', id);
   };
 
+  const handleApprove = async (id: string, x: number = 200, y: number = 200) => {
+    // Move to board (approve)
+    // Set position to where-ever, or maybe create a stack. Logic:
+    // Moderator approves -> it becomes "approved" and visible on board.
+    // Ideally we place it somewhere visible. Let's use 200,200 for now or random near center.
+    // Updating status to 'approved'.
+
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    const updatedItem = { ...item, status: 'approved' as const, x, y };
+
+    setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
+
+    await supabase.from('board_items').update({
+      status: 'approved',
+      position: { x, y }
+    }).eq('id', id);
+  };
+
+  const handleReject = async (id: string) => {
+    handleDelete(id);
+  };
+
+  // Filter items
+  // Active: approved items OR (if moderator, items I made that are on board? No, canvas shows only approved)
+  // Let's decide: Canvas shows "Approved" items. 
+  // "Pending" items are in the queue.
+  const activeItems = items.filter(i => i.status === 'approved');
+  const pendingItems = items.filter(i => i.status === 'pending');
+
   return (
     <div className="w-full h-full relative bg-white dark:bg-zinc-950">
       <CanvasBoard
-        items={items}
+        items={activeItems}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
         onDelete={handleDelete}
@@ -448,6 +537,14 @@ function SharedBoardView() {
             <span>Draft Idea (PR)</span>
           </button>
         </div>
+      )}
+
+      {isModerator && pendingItems.length > 0 && (
+        <ApprovalQueue
+          items={pendingItems}
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
       )}
 
       <AnimatePresence>

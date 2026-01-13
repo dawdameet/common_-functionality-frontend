@@ -26,9 +26,13 @@ async function migrate() {
         console.log('Connecting to database...');
         await client.connect();
 
-        const schemaPath = path.join(__dirname, '..', 'supabase', 'schema.sql');
-        console.log(`Reading schema from ${schemaPath}...`);
-        const sql = fs.readFileSync(schemaPath, 'utf8');
+        // Get file from args or default
+        // Filter out the connection string if it was passed as process.argv[2]
+        const validArgs = process.argv.slice(2).filter(arg => !arg.startsWith('postgresql://') && !arg.startsWith('postgres://'));
+        const sqlFile = validArgs[0] || path.join(__dirname, '..', 'supabase', 'schema.sql');
+
+        console.log(`Reading schema from ${sqlFile}...`);
+        const sql = fs.readFileSync(sqlFile, 'utf8');
 
         console.log('Applying migration...');
         await client.query(sql);
