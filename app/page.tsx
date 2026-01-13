@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <div className="flex min-h-screen bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-sans selection:bg-zinc-900 selection:text-zinc-100 dark:selection:bg-zinc-100 dark:selection:text-zinc-900 transition-colors duration-300">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
+
       <main className="flex-1 ml-0 md:ml-20 pb-20 md:pb-0 min-h-screen relative overflow-hidden">
         {/* Surface Container */}
         <div className="h-full w-full">
@@ -68,13 +68,17 @@ function ScribbleSurface() {
 }
 
 import { TaskBoard } from "@/components/tasks/TaskBoard";
+import { PomodoroTimer } from "@/components/tasks/PomodoroTimer";
 
 function TasksSurface() {
   return (
     <div className="p-4 md:p-12 pb-0 h-full flex flex-col">
-      <header className="mb-6 md:mb-12">
-        <h1 className="text-zinc-900 dark:text-zinc-100 text-2xl md:text-3xl font-light tracking-tight">Execution Spine</h1>
-        <p className="text-zinc-500 mt-1 md:mt-2 text-sm md:text-base">Decisions in motion.</p>
+      <header className="mb-6 md:mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-zinc-900 dark:text-zinc-100 text-2xl md:text-3xl font-light tracking-tight">Execution Spine</h1>
+          <p className="text-zinc-500 mt-1 md:mt-2 text-sm md:text-base">Decisions in motion.</p>
+        </div>
+        <PomodoroTimer />
       </header>
       <div className="flex-1">
         <TaskBoard />
