@@ -96,16 +96,25 @@ export function BoardCanvas() {
   const [personalBoards, setPersonalBoards] = useState<PersonalBoard[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
 
-  const createPersonalBoard = () => {
+  const createPersonalBoard = (initialTitle?: string, initialItems?: BoardItem[]) => {
     const newBoard: PersonalBoard = {
       id: crypto.randomUUID(),
-      title: `Personal Board ${personalBoards.length + 1}`,
-      items: [],
+      title: initialTitle || `Personal Board ${personalBoards.length + 1}`,
+      items: initialItems || [],
       createdAt: Date.now(),
     };
     setPersonalBoards([newBoard, ...personalBoards]);
     setActiveBoardId(newBoard.id);
-    setViewMode("personal-board");
+    // Don't switch view mode automatically if it's an auto-creation from draft (unless desired? User said "auto create", didn't say "switch to").
+    // Let's assume we WANT to switch to it to show the user "Here is your workspace" or maybe stay on Shared so they can see "Pending".
+    // User context: "auto create a new personla board...". Usually implies "saving a copy for myself".
+    // I will NOT switch view mode instantly if it disrupts the drafting flow, but maybe a toast?
+    // Actually, simply creating it is enough. Let's NOT switch view mode to avoid jarring context switch.
+    // Wait, the user might want to work on it.
+    // Let's only switch if no args provided (default button).
+    if (!initialTitle) {
+      setViewMode("personal-board");
+    }
   };
 
   const openBoard = (id: string) => {
@@ -135,7 +144,7 @@ export function BoardCanvas() {
               View My Boards
             </button>
             <button
-              onClick={createPersonalBoard}
+              onClick={() => createPersonalBoard()}
               className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -154,7 +163,7 @@ export function BoardCanvas() {
         )}
       </div>
 
-      {viewMode === "shared" && <SharedBoardView />}
+      {viewMode === "shared" && <SharedBoardView onCreatePersonalBoard={createPersonalBoard} />}
 
       {viewMode === "personal-list" && (
         <PersonalBoardList
@@ -171,6 +180,40 @@ export function BoardCanvas() {
           onBack={() => setViewMode("personal-list")}
         />
       )}
+    </div>
+  );
+}
+
+function NotificationModal({ message, onClose, type = 'success' }: { message: string, onClose: () => void, type?: 'success' | 'error' }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        className="bg-white dark:bg-zinc-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center text-center"
+      >
+        <div className={cn(
+          "w-12 h-12 rounded-full flex items-center justify-center mb-4",
+          type === 'success' ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+        )}>
+          {type === 'success' ? <Sparkles className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
+        </div>
+
+        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+          {type === 'success' ? 'Success' : 'Error'}
+        </h3>
+        <p className="text-sm text-zinc-500 mb-6">
+          {message}
+        </p>
+
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl font-medium hover:scale-[1.02] active:scale-[0.98] transition-all"
+        >
+          Got it
+        </button>
+      </motion.div>
     </div>
   );
 }
@@ -444,10 +487,11 @@ function PersonalBoardList({ boards, onOpen, onCreate }: { boards: PersonalBoard
 
 // --- Shared Board (Supabase) ---
 
-function SharedBoardView() {
+function SharedBoardView({ onCreatePersonalBoard }: { onCreatePersonalBoard: (title: string, items: BoardItem[]) => void }) {
   const { currentUser } = useUser();
   const [items, setItems] = useState<BoardItem[]>([]);
   const [isDrafting, setIsDrafting] = useState(false);
+  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const supabase = createClient();
   const isModerator = currentUser.role === "moderator";
 
@@ -572,6 +616,16 @@ function SharedBoardView() {
     handleDelete(id);
   };
 
+  const handleEmptyBoard = async () => {
+    if (confirm("Are you sure you want to EMPTY the ENTIRE shared board? This cannot be undone.")) {
+      // 1. Clear local
+      setItems([]);
+      // 2. Clear DB (except archived?) or just nuke all.
+      // User said "EMPTY BOARD". 
+      await supabase.from('board_items').delete().neq('status', 'archived');
+    }
+  };
+
   // Filter items
   // Active: approved items OR (if moderator, items I made that are on board? No, canvas shows only approved)
   // Let's decide: Canvas shows "Approved" items. 
@@ -611,6 +665,18 @@ function SharedBoardView() {
         </div>
       )}
 
+      {isModerator && (
+        <div className="absolute top-4 right-4 z-20">
+          <button
+            onClick={handleEmptyBoard}
+            className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg border border-red-500/20 transition-colors text-sm font-medium"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Empty Board</span>
+          </button>
+        </div>
+      )}
+
       {isModerator && pendingItems.length > 0 && (
         <ApprovalQueue
           items={pendingItems}
@@ -641,15 +707,42 @@ function SharedBoardView() {
                   });
                   if (!error) {
                     setIsDrafting(false);
-                    // Optimistic update?
-                    // Realtime will catch it if we are subscribed.
+
+                    // Auto-create Personal Board Copy
+                    const personalCopyItem: NoteItem = {
+                      id: crypto.randomUUID(),
+                      type: data.type === "idea" ? "idea" : "note",
+                      title: data.title,
+                      content: data.content,
+                      x: 100, y: 100,
+                      status: 'approved'
+                    };
+                    onCreatePersonalBoard(data.title, [personalCopyItem]);
+                    setNotification({
+                      message: "Draft submitted! A personal board copy has been created for you.",
+                      type: 'success'
+                    });
+
                   } else {
-                    alert("Failed to submit: " + error.message);
+                    setNotification({
+                      message: "Failed to submit: " + error.message,
+                      type: 'error'
+                    });
                   }
                 }}
               />
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {notification && (
+          <NotificationModal
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotification(null)}
+          />
         )}
       </AnimatePresence>
     </div>
