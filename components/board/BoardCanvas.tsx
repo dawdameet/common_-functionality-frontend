@@ -184,6 +184,82 @@ export function BoardCanvas() {
   );
 }
 
+
+function ProposalModal({ item, onClose, onApprove, onReject }: {
+  item: BoardItem,
+  onClose: () => void,
+  onApprove: () => void,
+  onReject: () => void
+}) {
+  // Type guard for title/content
+  const title = (item as any).title || "Untitled";
+  const content = (item as any).content || "No content available.";
+  const itemType = (item as any).type || "item";
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden max-h-[80vh]"
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono uppercase bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-600 dark:text-zinc-400">
+              {itemType}
+            </span>
+            <h2 className="font-semibold text-lg text-zinc-900 dark:text-zinc-100">{title}</h2>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="prose dark:prose-invert max-w-none">
+            <p className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300 leading-relaxed text-lg">
+              {content}
+            </p>
+          </div>
+
+          {!isNote(item) && !isText(item) && (
+            <div className="mt-8 p-8 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl flex flex-col items-center justify-center text-zinc-400">
+              <Layout className="w-12 h-12 mb-4 opacity-20" />
+              <p>Visual content (Drawing/Shape) cannot be previewed in text mode.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between gap-4">
+          <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-zinc-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors text-sm font-medium">
+            <Sparkles className="w-4 h-4" />
+            <span>AI Summary</span>
+          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onReject}
+              className="px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm font-medium"
+            >
+              Reject
+            </button>
+            <button
+              onClick={onApprove}
+              className="px-6 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90 transition-opacity text-sm font-medium"
+            >
+              Approve Proposal
+            </button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Backdrop close */}
+      <div className="absolute inset-0 -z-10" onClick={onClose} />
+    </div>
+  );
+}
+
 function NotificationModal({ message, onClose, type = 'success' }: { message: string, onClose: () => void, type?: 'success' | 'error' }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
@@ -295,26 +371,41 @@ function ApprovalQueue({ items, onApprove, onReject }: {
   onApprove: (id: string, x?: number, y?: number) => void,
   onReject: (id: string) => void
 }) {
+  const [previewItem, setPreviewItem] = useState<BoardItem | null>(null);
+
+  const handleApprove = (id: string) => {
+    onApprove(id, Math.random() * 400 + 100, Math.random() * 300 + 100);
+    setPreviewItem(null);
+  };
+
+  const handleReject = (id: string) => {
+    onReject(id);
+    setPreviewItem(null);
+  };
   return (
     <div className="absolute top-20 right-4 z-40 flex flex-col gap-2 max-h-[calc(100vh-160px)] overflow-y-auto pr-2 custom-scrollbar">
       <h3 className="text-xs font-bold uppercase text-zinc-400 tracking-wider mb-2">Pending Proposals</h3>
       <div className="flex flex-col gap-3">
         {items.map(item => (
-          <div key={item.id} className="w-80 p-4 bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-amber-300 dark:border-amber-700/50 shadow-lg relative group">
+          <div
+            key={item.id}
+            onClick={() => setPreviewItem(item)}
+            className="w-80 p-4 bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-amber-300 dark:border-amber-700/50 shadow-lg relative group cursor-pointer hover:scale-[1.02] transition-transform"
+          >
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-mono text-zinc-400 uppercase border border-zinc-200 dark:border-zinc-800 px-1.5 py-0.5 rounded">
                 {isNote(item) ? item.type : "item"}
               </span>
               <div className="flex gap-1">
                 <button
-                  onClick={() => onReject(item.id)}
+                  onClick={(e) => { e.stopPropagation(); handleReject(item.id); }}
                   className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded transition-colors"
                   title="Reject"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => onApprove(item.id, Math.random() * 400 + 100, Math.random() * 300 + 100)}
+                  onClick={(e) => { e.stopPropagation(); handleApprove(item.id); }}
                   className="p-1 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-500 rounded transition-colors"
                   title="Approve"
                 >
@@ -340,6 +431,17 @@ function ApprovalQueue({ items, onApprove, onReject }: {
           </div>
         ))}
       </div>
+
+      <AnimatePresence>
+        {previewItem && (
+          <ProposalModal
+            item={previewItem}
+            onClose={() => setPreviewItem(null)}
+            onApprove={() => handleApprove(previewItem.id)}
+            onReject={() => handleReject(previewItem.id)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
