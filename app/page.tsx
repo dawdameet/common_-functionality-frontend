@@ -5,11 +5,14 @@ import { Sidebar } from "@/components/navigation/Sidebar";
 
 import { BoardCanvas } from "@/components/board/BoardCanvas";
 import { UserProvider, useUser } from "@/components/auth/UserContext";
+import { NotificationProvider } from "@/components/notifications/NotificationContext";
 
 export default function Home() {
   return (
     <UserProvider>
-      <AppShell />
+      <NotificationProvider>
+        <AppShell />
+      </NotificationProvider>
     </UserProvider>
   );
 }

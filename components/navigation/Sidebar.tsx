@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useNotifications } from "../notifications/NotificationContext";
 
 const navItems = [
   { id: "board", label: "Shared Board", icon: LayoutDashboard },
@@ -31,6 +32,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+  const { totalUnread } = useNotifications();
   return (
     <div className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 md:top-0 flex flex-row md:flex-col items-center justify-between md:justify-start px-4 md:px-0 py-2 md:py-8 bg-white dark:bg-zinc-950 border-t md:border-t-0 md:border-r border-zinc-200 dark:border-zinc-800/50 z-50 transition-colors duration-300">
       <div className="hidden md:block md:mb-12">
@@ -56,6 +58,9 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               )}
             >
               <Icon className="w-5 h-5 md:w-6 md:h-6" />
+              {item.id === "comm" && totalUnread > 0 && activeTab !== "comm" && (
+                <span className="absolute top-2 right-2 md:top-2 md:right-2 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-white dark:border-zinc-950 animate-pulse" />
+              )}
 
               {isActive && (
                 <motion.div
