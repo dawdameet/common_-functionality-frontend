@@ -35,6 +35,7 @@ export function CalendarView() {
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(undefined);
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -64,15 +65,27 @@ export function CalendarView() {
 
   const handleAddEvent = (dateStr?: string) => {
     setSelectedDate(dateStr);
+    setSelectedEvent(undefined);
     setIsModalOpen(true);
   };
 
-  const handleSaveEvent = (newEvent: Omit<CalendarEvent, "id">) => {
-    const event: CalendarEvent = {
-      ...newEvent,
-      id: Math.random().toString(36).substr(2, 9),
-    };
-    setEvents([...events, event]);
+  const handleEventClick = (event: CalendarEvent) => {
+    setSelectedEvent(event);
+    setSelectedDate(undefined);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveEvent = (eventData: Omit<CalendarEvent, "id">) => {
+    if (selectedEvent) {
+      setEvents(events.map(e => e.id === selectedEvent.id ? { ...eventData, id: selectedEvent.id } : e));
+    } else {
+      const newEvent: CalendarEvent = {
+        ...eventData,
+        id: Math.random().toString(36).substr(2, 9),
+      };
+      setEvents([...events, newEvent]);
+    }
+    setIsModalOpen(false);
   };
 
   return (
@@ -177,8 +190,20 @@ export function CalendarView() {
                 {isCurrentMonth && (
                   <div className="flex-1 flex flex-col gap-1 mt-1 overflow-y-auto">
                     {dayEvents.map(event => (
-                      <div key={event.id} className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 truncate font-medium border border-blue-200 dark:border-blue-800/50">
-                        {event.time} {event.title}
+                      <div
+                        key={event.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEventClick(event);
+                        }}
+                        className={cn(
+                          "text-xs px-2 py-1 rounded truncate font-medium border transition-all hover:scale-[1.02] cursor-pointer",
+                          event.type === "meeting" && "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
+                          event.type === "deadline" && "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50",
+                          event.type === "reminder" && "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50"
+                        )}
+                      >
+                        {event.title}
                       </div>
                     ))}
                   </div>
@@ -193,6 +218,7 @@ export function CalendarView() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveEvent}
         initialDate={selectedDate}
+        initialEvent={selectedEvent}
       />
     </div>
   );

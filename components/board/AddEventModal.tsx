@@ -8,9 +8,10 @@ interface AddEventModalProps {
     onClose: () => void;
     onSave: (event: Omit<CalendarEvent, "id">) => void;
     initialDate?: string;
+    initialEvent?: CalendarEvent;
 }
 
-export function AddEventModal({ isOpen, onClose, onSave, initialDate }: AddEventModalProps) {
+export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEvent }: AddEventModalProps) {
     const [title, setTitle] = useState("");
     const [date, setDate] = useState("");
     const [time, setTime] = useState("");
@@ -18,17 +19,40 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate }: AddEvent
 
     useEffect(() => {
         if (isOpen) {
-            if (initialDate) {
-                setDate(initialDate);
+            if (initialEvent) {
+                setTitle(initialEvent.title);
+                setDate(initialEvent.date);
+                // Parse time back if needed, but for now let's assume it matches or is empty
+                // Our time stored is "10:00 AM". Input needs "10:00" (24h)
+                // Simple parsing for now:
+                let timeVal = "";
+                if (initialEvent.time) {
+                    const parts = initialEvent.time.split(' ');
+                    if (parts.length === 2) {
+                        const [hm, ampm] = parts;
+                        let [h, m] = hm.split(':').map(Number);
+                        if (ampm === 'PM' && h < 12) h += 12;
+                        if (ampm === 'AM' && h === 12) h = 0;
+                        timeVal = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                    } else {
+                        timeVal = initialEvent.time;
+                    }
+                }
+                setTime(timeVal);
+                setType(initialEvent.type);
             } else {
-                setDate(new Date().toISOString().split("T")[0]);
+                if (initialDate) {
+                    setDate(initialDate);
+                } else {
+                    setDate(new Date().toISOString().split("T")[0]);
+                }
+                // Reset other fields
+                setTitle("");
+                setTime("09:00");
+                setType("meeting");
             }
-            // Reset other fields
-            setTitle("");
-            setTime("09:00");
-            setType("meeting");
         }
-    }, [isOpen, initialDate]);
+    }, [isOpen, initialDate, initialEvent]);
 
     if (!isOpen) return null;
 
@@ -68,7 +92,7 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate }: AddEvent
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
-                    <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">Add New Event</h2>
+                    <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">{initialEvent ? "Edit Event" : "Add New Event"}</h2>
                     <button
                         onClick={onClose}
                         className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -168,7 +192,7 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate }: AddEvent
                             type="submit"
                             className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium shadow-sm hover:scale-105 transition-all"
                         >
-                            Add Event
+                            {initialEvent ? "Save Changes" : "Add Event"}
                         </button>
                     </div>
 
