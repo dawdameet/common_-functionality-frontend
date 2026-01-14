@@ -423,6 +423,7 @@ export function CommunicationHub() {
             messages.map((msg, i) => {
               const isMe = msg.user_id === currentUser.id;
               const showHeader = i === 0 || messages[i - 1].user_id !== msg.user_id || (new Date(msg.created_at).getTime() - new Date(messages[i - 1].created_at).getTime() > 1000 * 60 * 5);
+              
               const renderContent = () => {
                  const parts = msg.content.split(/(@[\w\s]+)/g);
                  return parts.map((part, idx) => {

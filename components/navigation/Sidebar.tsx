@@ -36,8 +36,8 @@ export function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   return (
     <div className="fixed bottom-0 left-0 w-full h-16 md:h-full md:w-20 md:top-0 flex flex-row md:flex-col items-center justify-between md:justify-start px-4 md:px-0 py-2 md:py-8 bg-white dark:bg-zinc-950 border-t md:border-t-0 md:border-r border-zinc-200 dark:border-zinc-800/50 z-50 transition-colors duration-300">
       <div className="hidden md:block md:mb-12">
-        <div className="w-8 h-8 rounded-full bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center">
-          <div className="w-4 h-4 bg-zinc-100 dark:bg-zinc-950 rounded-sm rotate-45" />
+        <div className="w-8 h-8 rounded-full bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center overflow-hidden">
+             <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
         </div>
       </div>
 
