@@ -6,6 +6,7 @@ import { PenTool, Type, Eraser, Circle, Minus, Palette, X, Save, FileDown, Trash
 import { cn } from "@/lib/utils";
 import NextImage from "next/image";
 import { useTheme } from "next-themes";
+import { createClient } from "@/utils/supabase/client";
 
 type Tool = "pen" | "line" | "circle" | "text" | "eraser" | "hand";
 const COLORS = ["#18181b", "#ffffff", "#ef4444", "#3b82f6", "#22c55e", "#a855f7"];
@@ -40,13 +41,23 @@ interface Stroke {
     tool: "pen" | "eraser";
 }
 
+interface ImageElement {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  data: string; // Data URL
+}
+
 interface SavedScribble {
   id: string;
   title: string;
   timestamp: number;
-  canvasData: string; // Used as thumbnail/snapshot
+  canvasData: string; 
   textElements: TextElement[];
   shapeElements: ShapeElement[];
+  imageElements?: ImageElement[];
   strokes?: Stroke[];
 }
 
@@ -64,12 +75,17 @@ interface Confirmation {
 
 export function Scribblepad() {
   const { resolvedTheme } = useTheme();
+  const supabase = createClient();
   
   // State
   const [textElements, setTextElements] = useState<TextElement[]>([]);
   const [shapeElements, setShapeElements] = useState<ShapeElement[]>([]);
+  const [imageElements, setImageElements] = useState<ImageElement[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
+  
+  // Cache for loaded images
+  const loadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
   const [activeTool, setActiveTool] = useState<Tool>("pen");
   const [manualColor, setManualColor] = useState<string | null>(null);
@@ -79,19 +95,100 @@ export function Scribblepad() {
   const paletteRef = useRef<HTMLDivElement>(null);
   
   // History State
-  const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("scribble_history");
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          console.error("Failed to load history", e);
+  const [savedScribbles, setSavedScribbles] = useState<SavedScribble[]>([]);
+
+  // Fetch from Supabase
+  useEffect(() => {
+    const fetchScribbles = async () => {
+        const { data, error } = await supabase
+            .from('scribbles')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error("Error fetching scribbles:", error);
+            return;
         }
-      }
-    }
-    return [];
-  });
+
+        if (data) {
+            const mapped: SavedScribble[] = data.map(row => {
+                const content = row.content;
+                // Handle Meeting Snapshots
+                if (content.type === 'meeting_snapshot' && content.boardData) {
+                    const boardData = content.boardData;
+                    const newStrokes: Stroke[] = [];
+                    const newTexts: TextElement[] = [];
+                    const newShapes: ShapeElement[] = [];
+                    const newImages: ImageElement[] = [];
+
+                    boardData.forEach((obj: any) => {
+                        if (obj.type === 'path') {
+                            newStrokes.push({
+                                id: obj.id,
+                                points: obj.data.map((p: number[]) => ({ x: p[0], y: p[1] })),
+                                color: obj.color,
+                                width: 3,
+                                tool: 'pen'
+                            });
+                        } else if (obj.type === 'text') {
+                            newTexts.push({
+                                id: obj.id,
+                                x: obj.x,
+                                y: obj.y,
+                                text: obj.data
+                            });
+                        } else if (obj.type === 'circle') {
+                            newShapes.push({
+                                id: obj.id,
+                                type: 'circle',
+                                x: obj.x - obj.data.r,
+                                y: obj.y - obj.data.r,
+                                endX: obj.x + obj.data.r,
+                                endY: obj.y + obj.data.r,
+                                color: obj.color
+                            });
+                        } else if (obj.type === 'image') {
+                            newImages.push({
+                                id: obj.id,
+                                x: obj.x,
+                                y: obj.y,
+                                width: obj.width || 200,
+                                height: obj.height || 200,
+                                data: obj.data
+                            });
+                        }
+                    });
+
+                    return {
+                        id: row.id,
+                        title: content.title || "Meeting Note",
+                        timestamp: new Date(row.created_at).getTime(),
+                        canvasData: "", 
+                        textElements: newTexts,
+                        shapeElements: newShapes,
+                        imageElements: newImages,
+                        strokes: newStrokes
+                    };
+                }
+                
+                return {
+                     id: row.id,
+                     title: content.title || "Untitled",
+                     timestamp: new Date(row.created_at).getTime(),
+                     canvasData: content.canvasData || "",
+                     textElements: content.textElements || [],
+                     shapeElements: content.shapeElements || [],
+                     imageElements: content.imageElements || [],
+                     strokes: content.strokes || []
+                };
+            });
+            setSavedScribbles(mapped);
+        }
+    };
+    
+    fetchScribbles();
+  }, []);
+
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   
@@ -144,6 +241,21 @@ export function Scribblepad() {
       if (backgroundImage) {
           ctx.drawImage(backgroundImage, 0, 0);
       }
+
+      // Draw Image Elements
+      imageElements.forEach(imgEl => {
+          if (loadedImagesRef.current.has(imgEl.data)) {
+              const img = loadedImagesRef.current.get(imgEl.data)!;
+              ctx.drawImage(img, imgEl.x, imgEl.y, imgEl.width, imgEl.height);
+          } else {
+              const img = new Image();
+              img.onload = () => {
+                  loadedImagesRef.current.set(imgEl.data, img);
+                  renderCanvas();
+              };
+              img.src = imgEl.data;
+          }
+      });
 
       // Draw Strokes
       ctx.lineCap = "round";
@@ -491,6 +603,7 @@ export function Scribblepad() {
           canvasData,
           textElements,
           shapeElements,
+          imageElements,
           strokes
       };
       const newHistory = [newSave, ...savedScribbles];
@@ -504,6 +617,7 @@ export function Scribblepad() {
       
       setTextElements(scribble.textElements);
       setShapeElements(scribble.shapeElements || []);
+      setImageElements(scribble.imageElements || []);
       setStrokes(scribble.strokes || []);
 
       if ((!scribble.strokes || scribble.strokes.length === 0) && scribble.canvasData) {

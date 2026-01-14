@@ -192,20 +192,31 @@ export function AddEventModal({ isOpen, onClose, onSave, initialDate, initialEve
                     )}
 
                     {/* Footer Actions */}
-                    <div className="flex items-center justify-end gap-3 mt-4 pt-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium shadow-sm hover:scale-105 transition-all"
-                        >
-                            {initialEvent ? "Save Changes" : "Add Event"}
-                        </button>
+                    <div className="flex items-center justify-between mt-4 pt-2">
+                         {initialEvent && type === 'meeting' && (
+                            <button
+                                type="button"
+                                onClick={() => window.open(`/meet/${initialEvent.id}`, '_blank')}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                            >
+                                Join Meeting
+                            </button>
+                        )}
+                        <div className="flex items-center gap-3 ml-auto">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium shadow-sm hover:scale-105 transition-all"
+                            >
+                                {initialEvent ? "Save Changes" : "Add Event"}
+                            </button>
+                        </div>
                     </div>
 
                 </form>

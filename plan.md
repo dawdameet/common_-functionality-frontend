@@ -261,10 +261,13 @@ Restraint is the product.
 4. Task widget with calendar sync
 5. Meeting summary → tasks extraction
 6. AI summarization + similarity detection
+7. **Video Calling with Transient Board**
+   *   Pre-decided or emergency meets.
+   *   Live shared whiteboard (notes, lines, shapes).
+   *   **On End:** Board content auto-saved to every participant's Personal Scribblepad.
 
 ### ❌ V1 DOES NOT HAVE
 
-* Video calls (can stub)
 * Work-hour tracking
 * Advanced analytics
 * Multi-board linking

@@ -29,6 +29,7 @@ function AppShell() {
           {activeTab === "comm" && <CommSurface />}
           {activeTab === "team" && <TeamSurface />}
           {activeTab === "profile" && <ProfileSurface />}
+          {activeTab === "vault" && <VaultWrapper />}
         </div>
         
         {/* Global Widgets */}
@@ -50,6 +51,8 @@ function CalendarSurface() {
   );
 }
 
+import { VaultSurface } from "@/components/vault/VaultSurface";
+
 // Temporary placeholder components for surfaces
 function BoardSurface() {
   return (
@@ -59,6 +62,14 @@ function BoardSurface() {
       </div>
     </div>
   );
+}
+
+function VaultWrapper() {
+    return (
+        <div className="h-full">
+            <VaultSurface />
+        </div>
+    )
 }
 
 import { Scribblepad } from "@/components/scribble/Scribblepad";

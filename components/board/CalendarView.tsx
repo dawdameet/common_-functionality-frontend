@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddEventModal } from "./AddEventModal";
 import { useUser } from "../auth/UserContext";
@@ -168,6 +168,33 @@ export function CalendarView() {
               className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition-colors"
             >
               <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={async () => {
+                const startTime = new Date().toISOString();
+                const endTime = new Date(Date.now() + 60*60*1000).toISOString();
+                // Create a global event so others can see and join
+                const { data, error } = await supabase.from('calendar_events').insert({
+                    title: "Instant Meeting (Live)",
+                    start_time: startTime,
+                    end_time: endTime,
+                    type: "meeting",
+                    is_global: true,
+                    owner_id: currentUser?.id
+                }).select().single();
+
+                if (data) {
+                    window.open(`/meet/${data.id}`, '_blank');
+                } else {
+                    console.error("Failed to create meeting", error);
+                    // Fallback
+                    window.open(`/meet/${crypto.randomUUID()}`, '_blank');
+                }
+              }}
+              className="ml-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+            >
+              <Video className="w-4 h-4" />
+              <span>Instant Meet</span>
             </button>
             <button
               onClick={() => handleAddEvent()}

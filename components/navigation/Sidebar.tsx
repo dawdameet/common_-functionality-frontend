@@ -10,7 +10,8 @@ import {
   Sparkles,
   UserCircle,
   Calendar,
-  Users
+  Users,
+  Archive
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -22,6 +23,7 @@ const navItems = [
   { id: "calendar", label: "Calendar", icon: Calendar },
   { id: "tasks", label: "Tasks", icon: CheckSquare },
   { id: "comm", label: "Communication", icon: MessageSquare },
+  { id: "vault", label: "Vault", icon: Archive },
   // { id: "ai", label: "AI Layer", icon: Sparkles }, // V1 Scope Change
   { id: "team", label: "Team", icon: Users },
 ];
